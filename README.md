@@ -17,7 +17,7 @@ Follow the shortcuts in the following table to the individual demos.
 
 | Name | First Demo | Description |
 | --- | --- | --- |
-| [2023-ecp-f2f](demos/2023-ecp-f2f/demo.ipynb) | ELIXIR Compute Face-to-Face, Helsinki, Feb 7-8, 2023 | Task execution via the [Task Execution Service (TES) API](https://github.com/ga4gh/task-execution-schemas/) on Kubernetes and HPC; TES-based task distribution with random and distance-based task distribution logic; execution of CWL and Snakemake workflows via their TES backends |
+| [2023-ecp-f2f](demos/2023-ecp-f2f/README.md) | ELIXIR Compute Face-to-Face, Helsinki, Feb 7-8, 2023 | Task execution via the [Task Execution Service (TES) API](https://github.com/ga4gh/task-execution-schemas/) on Kubernetes and HPC; TES-based task distribution with random and distance-based task distribution logic; execution of CWL and Snakemake workflows via their TES backends |
 
 ## Requirements
 

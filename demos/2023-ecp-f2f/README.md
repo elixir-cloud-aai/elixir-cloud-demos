@@ -56,10 +56,28 @@ jupyter-lab --version
 snakemake --version
 ```
 
-You will also need to create a secrets file `.env` with the following command.
-You can either set the environment variables in your shell or set the actual
-values in the command below. Either way, you need to create the file, it is
-not sufficient to just the environment variables in your shell!
+Next, you need to create a listing of the available TES instances in a
+comma-seprated file `.tes_instances`. You can use the following command to
+create such a file, but make sure to replace the example contents and do not
+use commas in the name/description field:
+
+```bash
+cat << "EOF" > .tes_instances
+Funnel/Slurm @ YourNode,https://tes.your-node.org/
+Funnel/PBS @ YetAnotherNode,https://tes.yet-another-node.org/
+TESK/Kubernetes @ OtherNode,https://tes.other-node.org/
+EOF
+```
+
+> Note that due to some differences between TESK and Funnel in handling FTP
+> files, it is important that any Funnel service contains the substring
+> `Funnel`(case-sensitive!) in its name/description, as in the example content.
+> Otherwise, some of the demo tasks will not work for Funnel services!
+
+Finally, you will need to create a secrets file `.env` with the following
+command.  You can either set the environment variables in your shell or set the
+actual values in the command below. Either way, you need to create the file, it
+is not sufficient to just the environment variables in your shell!
 
 ```bash
 cat << EOF > .env
@@ -67,11 +85,13 @@ FTP_USER=$FTP_USER
 FTP_PASSWORD=$FTP_PASSWORD
 FUNNEL_SERVER_USER=$FUNNEL_SERVER_USER
 FUNNEL_SERVER_PASSWORD=$FUNNEL_SERVER_PASSWORD
+TES_GATEWAY=$TES_GATEWAY
+FTP_INSTANCE=$FTP_INSTANCE
 EOF
 ```
 
 > If you want to run the demo on the ELIXIR Cloud infrastructure, please
-> contact us so that we can share these secrets with you.
+> contact us so that we can share the TES instances and secrets with you.
 
 ## Start notebook server
 

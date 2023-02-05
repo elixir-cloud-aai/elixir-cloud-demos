@@ -27,7 +27,7 @@ def main() -> None:
     _file=Path(".tes_instances")
     LOGGER.info(f"Importing TES instances from file {str(_file)}")
     try:
-        TES_INSTANCES = bash_assoc_array_from_file(_file=".tes_instances")
+        TES_INSTANCES = csv_to_dict(_file=".tes_instances")
     except FileNotFoundError:
         LOGGER.critical(f"No TES instances defined. Aborting.")
         sys.exit(1)
@@ -64,7 +64,8 @@ def main() -> None:
     task_states: Dict = dict.fromkeys(task_ids, "UNKNOWN")
     FINAL_STATES = ["COMPLETE", "EXECUTOR_ERROR", "SYSTEM_ERROR", "CANCELLED"]
     sleep_time=5
-    while not all(state in FINAL_STATES for _, state in task_states.items()):
+    repeats=4
+    for _ in range(repeats):
         LOGGER.info(f"Waiting for {sleep_time} seconds...")
         sleep(sleep_time)
         LOGGER.info(f"Checking states of all tasks...")
@@ -73,26 +74,33 @@ def main() -> None:
             task_state = get_task_state(task_id=task_id, url=url)
             task_states[task_id] = task_state
             LOGGER.info(f"Task state: {task_state}")
-    LOGGER.info(f"All tasks concluded.")
+        if all(state in FINAL_STATES for _, state in task_states.items()):
+            LOGGER.info(f"All tasks concluded.")
+            break
+    else:
+        LOGGER.warning(
+            f"Checks timed out while one or more tasks were still processing."
+        )
+    LOGGER.info("Done")
 
 
-def bash_assoc_array_from_file(_file: str, sep="\0") -> Dict:
-    """Get Bash associative array contents from file.
+def csv_to_dict(_file: str) -> Dict:
+    """Create dictionary from first two fields of a CSV file.
+
+    Any other columns are ignored.
 
     Args:
         _file: Path to file with associative array contents.
-        sep: String used to separate records when exporting associative array.
 
     Returns:
         Bash associative array contents as dictionary.
     """
     _dict: Dict = {}
-    fragments = open('.tes_instances', 'r').read().split(sep)
-    while len(fragments) >= 2:
-        key = fragments.pop(0)
-        val = fragments.pop(0);
-        _dict[key] = val
-    return _dict
+    with open(_file, "r") as _f:
+        for line in _f:
+            line_split = line.strip().split(",", maxsplit=2)
+            _dict[line_split[0]] = line_split[1]
+    return _dict 
 
 
 def submit_task(
