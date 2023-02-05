@@ -171,3 +171,7 @@ poetry.toml
 .ruff_cache/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Custom additions
+.env
+.tes_instances
