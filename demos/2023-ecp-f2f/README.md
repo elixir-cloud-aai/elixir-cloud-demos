@@ -44,6 +44,18 @@ You can install all client requirements with [Conda][soft-conda] or
 conda env install -f environment.yml
 ```
 
+Currently, the demo is relying on fixes of `cwl-tes` and `py-tes` that have
+not been merged to the upstream or released, yet, respectively.
+
+For `py-tes` this means that we will have to uninstall the version that is
+installed along with `cwl-tes` and then manually reinstall a version from a
+specific commit on a fork:
+
+```bash
+pip uninstall py-tes
+pip install git+https://github.com/ohsu-comp-bio/py-tes.git@a9ac2959fdb38bd31433d358724e20c2c544c6a1
+```
+
 You can verify the successful installation of dependencies by executing the
 following commands:
 

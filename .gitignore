@@ -175,3 +175,6 @@ poetry.toml
 # Custom additions
 .env
 .tes_instances
+.netrc
+results/
+.snakemake/

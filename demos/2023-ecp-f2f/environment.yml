@@ -12,5 +12,5 @@ dependencies:
   - python=3.8.16
   - snakemake=7.21.0
   - pip:
-      - git+https://github.com/athenarc/cwl-tes.git@8c65dd3979621539c61fecdaa79c9809504fb2f5
+      - git+https://github.com/uniqueg/cwl-tes.git@0de223ad3571ca30671ba983095420187ad9a9ba
       - pip~=23.0
