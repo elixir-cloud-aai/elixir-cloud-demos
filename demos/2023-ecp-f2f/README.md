@@ -18,15 +18,15 @@
 
 ## Service requirements
 
-The following services need to be deployed:
+The following services were deployed for the demo:
 
 | Service | Images tested | Configuration | Comment |
 | --- | --- | --- | --- |
-| [TESK][soft-tesk] | | Authorization checks disabled; RW permissions on FTP and MinIO | Deployments at multiple locations possible |
-| [Funnel][soft-funnel] | | Basic authentication; RW permissions on FTP and MinIO | Deployment for HPC; tested with OpenPBS and Slurm; deployments at multiple locations and for various HPC solutions possible |
-| [proTES][soft-protes] | | Authorization checks disabled; all TESK and Funnel services need to be configured | |
+| [TESK][soft-tesk] |  | Authorization checks disabled; RW permissions on FTP and MinIO | Deployments at multiple locations possible |
+| [Funnel][soft-funnel] |  | Basic authentication; RW permissions on FTP and MinIO | Deployment for HPC; tested with OpenPBS and Slurm; deployments at multiple locations and for various HPC solutions possible |
+| [proTES][soft-protes] |  | Authorization checks disabled; all TESK and Funnel services need to be configured | |
 | FTP | | Basic authentication | Deployments at multiple locations can be used for accessing inputs (but not writing outputs) |
-| [MinIO][soft-minio] | | Basic authentication | Only single instance can be used |
+| [MinIO][soft-minio] |  | Basic authentication | Only single instance can be used |
 
 > In this demo, publicly available services of the ELIXIR Cloud are used. You
 > can try to use these for testing, but there is no guarantee that these
