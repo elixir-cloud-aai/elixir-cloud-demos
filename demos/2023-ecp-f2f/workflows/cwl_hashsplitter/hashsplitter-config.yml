@@ -1,3 +1,3 @@
 input:
   class: File
-  path: https://www.athenarc.gr/sites/default/files/picture1_0.png
+  path: {{INPUT_FILE}}

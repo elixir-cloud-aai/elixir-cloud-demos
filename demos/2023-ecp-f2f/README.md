@@ -20,13 +20,14 @@
 
 The following services were deployed for the demo:
 
-| Service | Images tested | Configuration | Comment |
+| Service | Version / Image | Configuration | Comment |
 | --- | --- | --- | --- |
-| [TESK][soft-tesk] |  | Authorization checks disabled; RW permissions on FTP and MinIO | Deployments at multiple locations possible |
-| [Funnel][soft-funnel] |  | Basic authentication; RW permissions on FTP and MinIO | Deployment for HPC; tested with OpenPBS and Slurm; deployments at multiple locations and for various HPC solutions possible |
-| [proTES][soft-protes] |  | Authorization checks disabled; all TESK and Funnel services need to be configured | |
-| FTP | | Basic authentication | Deployments at multiple locations can be used for accessing inputs (but not writing outputs) |
-| [MinIO][soft-minio] |  | Basic authentication | Only single instance can be used |
+| [TESK][soft-tesk] | `cerit.io/tes-wes/tesk-api:0.1` | Authorization checks disabled; RW permissions for FTP preconfigured | Deployments for Kubernetes and OpenShift |
+| [Funnel][soft-funnel] | `0.10.1` (OpenPBS) / commit `#52ef90f` (Slurm) | Basic authentication; FTP access via basaic auth credentials in FTP URLs | Deployments for OpenPBS and Slurm; others possible 
+but untested |
+| [proTES][soft-protes] | `elixircloud/protes:20230218` | Authorization checks disabled; all TESK and Funnel instances need to be listed in `tes.service_list` in the app configuration prior to 
+deployment | |
+| [vsftpd][soft-vsftpf] | `3.0.2-29.el7_9.x86_64` on Rocky Linux 8 | Basic authentication | Deployments at multiple locations can be used for reading inputs, but not writing outputs, as long as access credentials are set in TESK instances _and_ basic authentication credentials are passed as part of the FTP URLs to Funnel |
 
 > In this demo, publicly available services of the ELIXIR Cloud are used. You
 > can try to use these for testing, but there is no guarantee that these
@@ -69,9 +70,10 @@ snakemake --version
 ```
 
 Next, you need to create a listing of the available TES instances in a
-comma-seprated file `.tes_instances`. You can use the following command to
-create such a file, but make sure to replace the example contents and do not
-use commas in the name/description field:
+comma-seprated file `.tes_instances`. Two fields/columns are required, a
+description of the TES instance, and the URL pointing to it. You can use the
+following command to create such a file, but make sure to replace the example
+contents and do not use commas in the name/description field:
 
 ```bash
 cat << "EOF" > .tes_instances
@@ -85,6 +87,22 @@ EOF
 > files, it is important that any Funnel service contains the substring
 > `Funnel`(case-sensitive!) in its name/description, as in the example content.
 > Otherwise, some of the demo tasks will not work for Funnel services!
+
+You will also need to create a comma-separated file `.inputs`, containing the
+locations of input files and the URLs pointing to them, in the first and second
+field, respectively. Additionally, the file needs to include one row, in which
+the first field is `workflow` (case-sensitive!). This file will be used as an
+input to the example CWL workflow in the last part. You can use the following
+command to create such a file, but make sure to replace the example contents.
+Also make sure not to include commas in the file location field.
+
+```bash
+cat << "EOF" > .inputs
+location_x,https://link.to.some/file.txt
+location_y,https://link.to.some/other_file.tab
+location_z,https://link.to.some/third_file.png
+workflow,https://link.to.some/workflow_input
+```
 
 Finally, you will need to create a secrets file `.env` with the following
 command.  You can either set the environment variables in your shell or set the
@@ -127,11 +145,11 @@ before, read the [official documentation][docs-jupyter-lab].
 [soft-conda]: <https://conda.io/>
 [soft-curl]: <https://curl.se/>
 [soft-cwl-tes]: <https://github.com/ohsu-comp-bio/cwl-tes>
+[soft-vsftpd]: <https://security.appspot.com/vsftpd.html>
 [soft-jupyter]: <https://jupyter.org/>
 [soft-kube]: <https://kubernetes.io/>
 [soft-funnel]: <https://ohsu-comp-bio.github.io/funnel>
 [soft-mamba]: <https://mamba.readthedocs.io/>
-[soft-minio]: <https://min.io/>
 [soft-protes]: <https://github.com/elixir-cloud-aai/proTES>
 [soft-py-tes]: <https://github.com/ohsu-comp-bio/py-tes>
 [soft-smk]: <https://snakemake.readthedocs.io/en/stable/executing/cloud.html#executing-a-snakemake-workflow-via-ga4gh-tes>
