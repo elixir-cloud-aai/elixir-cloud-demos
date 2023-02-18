@@ -17,7 +17,7 @@ Follow the shortcuts in the following table to the individual demos.
 
 | Name | First Demo | Description |
 | --- | --- | --- |
-| | |
+| [2023-ecp-f2f](demos/2023-ecp-f2f/README.md) | ELIXIR Compute Face-to-Face, Helsinki, Feb 7-8, 2023 | Task execution via the [Task Execution Service (TES) API](https://github.com/ga4gh/task-execution-schemas/) on Kubernetes and HPC; TES-based task distribution with random and distance-based task distribution logic; execution of a CWL workflow via the `cwl-tes` TES backend |
 
 ## Requirements
 
@@ -43,7 +43,8 @@ guidelines][docs-contributing] if you want to contribute. And please mind our
 
 Outside of version control, individual demos are not explicitly versioned. When
 a demo is first given, it becomes feature-locked, from which point on only
-maintenance may be performed on that demo in order to ensure its functionality.
+maintenance and documentation chores may be performed on that demo in order to
+ensure its functionality.
 
 ## License
 
