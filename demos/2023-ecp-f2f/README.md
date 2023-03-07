@@ -22,10 +22,8 @@ The following services were deployed for the demo:
 | Service | Version / Image | Configuration | Comment |
 | --- | --- | --- | --- |
 | [TESK][soft-tesk] | `cerit.io/tes-wes/tesk-api:0.1` | Authorization checks disabled; RW permissions for FTP preconfigured | Deployments for Kubernetes and OpenShift |
-| [Funnel][soft-funnel] | `0.10.1` (OpenPBS) / commit `#52ef90f` (Slurm) | Basic authentication; FTP access via basaic auth credentials in FTP URLs | Deployments for OpenPBS and Slurm; others possible 
-but untested |
-| [proTES][soft-protes] | `elixircloud/protes:20230218` | Authorization checks disabled; all TESK and Funnel instances need to be listed in `tes.service_list` in the app configuration prior to 
-deployment | |
+| [Funnel][soft-funnel] | `0.10.1` (OpenPBS) / commit `#52ef90f` (Slurm) | Basic authentication; FTP access via basaic auth credentials in FTP URLs | Deployments for OpenPBS and Slurm; others possible but untested |
+| [proTES][soft-protes] | `elixircloud/protes:20230218` | Authorization checks disabled; all TESK and Funnel instances need to be listed in `tes.service_list` in the app configuration prior to deployment | |
 | [vsftpd][soft-vsftpd] | `3.0.2-29.el7_9.x86_64` on Rocky Linux 8 | Basic authentication | Deployments at multiple locations can be used for reading inputs, but not writing outputs, as long as access credentials are set in TESK instances _and_ basic authentication credentials are passed as part of the FTP URLs to Funnel |
 
 > In this demo, publicly available services of the ELIXIR Cloud are used. You
