@@ -48,7 +48,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tes-dashboard-service
+  name: tes-dashboard-secret
   namespace: default
   labels:
     app: tes-dashboard
