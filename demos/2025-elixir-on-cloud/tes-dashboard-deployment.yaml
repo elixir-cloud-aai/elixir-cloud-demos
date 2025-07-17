@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: tes-dashboard
-        image: keshxvdayal/tes-dashboard:latest
+        image: tes-dashboard
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
