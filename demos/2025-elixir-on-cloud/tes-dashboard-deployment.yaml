@@ -22,9 +22,6 @@ spec:
         ports:
         - containerPort: 5000
           name: http
-        envFrom:
-        - secretRef:
-            name: tes-dashboard-secret
         resources:
           requests:
             memory: "256Mi"
@@ -61,21 +58,3 @@ spec:
       name: http
   selector:
     app: tes-dashboard
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: tes-dashboard-nodeport
-  namespace: default
-  labels:
-    app: tes-dashboard
-spec:
-  type: NodePort
-  ports:
-    - port: 5000
-      targetPort: 5000
-      protocol: TCP
-      name: http
-      nodePort: 30080
-  selector:
-    app: tes-dashboard 
