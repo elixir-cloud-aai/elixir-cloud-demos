@@ -1,13 +1,14 @@
 import os
 os.environ['PATH'] = '/usr/local/bin:/usr/bin:' + os.environ.get('PATH', '')
-from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory, send_file, session
+from flask import Flask, render_template_string, request, redirect, url_for, flash, send_from_directory, send_file, session, jsonify
 from dotenv import load_dotenv
 from pathlib import Path
+from flask_cors import CORS
 import requests
 import subprocess
 import uuid
 import json
-
+from datetime import datetime
 env_file_path = Path(__file__).parent / '.env'
 print(f"=== DEBUG: .env file path: {env_file_path} ===")
 print(f"=== DEBUG: .env file exists: {env_file_path.exists()} ===")
@@ -118,6 +119,12 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
+# Configure CORS to allow requests from React frontend
+CORS(app, 
+     origins=['http://localhost:3000', 'http://127.0.0.1:3000'], 
+     supports_credentials=True,
+     allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 app.secret_key = 'supersecretkey'  # For flash messages
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -524,11 +531,154 @@ TEMPLATE = '''
 
         /* Map */
         #workflow-map {
-            height: 400px;
+            height: 500px;
             border-radius: 0.75rem;
             overflow: hidden;
             border: 1px solid var(--border-color);
             background: var(--card-bg);
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        #workflow-map::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(37,99,235,0.02) 0%, rgba(34,197,94,0.02) 100%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        #workflow-map .leaflet-container {
+            border-radius: 0.75rem;
+            z-index: 2;
+            position: relative;
+        }
+
+        .map-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            background: rgba(255,255,255,0.95);
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .map-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.2);
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            color: var(--error-color);
+            font-weight: 500;
+        }
+
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .map-control-btn {
+            background: rgba(255,255,255,0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .map-control-btn:hover {
+            background: rgba(255,255,255,1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .map-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .map-legend-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .map-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.8);
+        }
+
+        .tes-marker {
+            filter: grayscale(0.3) brightness(0.9);
+            transition: all 0.3s ease;
+        }
+
+        .tes-marker:hover {
+            filter: none;
+            transform: scale(1.1);
+        }
+
+        .tes-marker-active {
+            filter: none !important;
+            animation: pulse-glow 2s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { 
+                box-shadow: 0 0 0 0 rgba(37,99,235,0.4);
+                transform: scale(1);
+            }
+            100% { 
+                box-shadow: 0 0 0 12px rgba(37,99,235,0);
+                transform: scale(1.05);
+            }
+        }
+
+        .tes-marker-active i {
+            animation: bounce 1s infinite alternate;
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-3px); }
         }
 
         /* Alerts */
@@ -650,6 +800,60 @@ TEMPLATE = '''
         .workflow-step.active .workflow-step-icon {
             background: var(--main-bg-light);
         }
+
+        /* TES Instance Summary Table Improvements */
+        .tes-summary-table {
+          font-size: 0.97em;
+          min-width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+        }
+        .tes-summary-table th, .tes-summary-table td {
+          padding: 0.55rem 0.7rem;
+          vertical-align: middle;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          overflow: hidden;
+          max-width: 220px;
+        }
+        .tes-summary-table th {
+          font-size: 0.98em;
+          font-weight: 600;
+          background: var(--main-bg-light);
+          color: var(--text-primary);
+          border-bottom: 1.5px solid var(--border-color);
+        }
+        .tes-summary-table td {
+          font-size: 0.96em;
+          color: var(--text-secondary);
+          background: var(--card-bg);
+          border-bottom: 1px solid var(--border-color);
+        }
+        .tes-summary-table td a {
+          color: #2563eb;
+          text-decoration: underline;
+          font-size: 0.96em;
+          word-break: break-all;
+        }
+        .tes-summary-table .badge-info {
+          font-size: 0.92em;
+          padding: 0.18em 0.7em;
+          border-radius: 0.7em;
+          background: #f1f5f9;
+          color: #2563eb;
+          margin-left: 0.2em;
+        }
+        @media (max-width: 900px) {
+          .tes-summary-table th, .tes-summary-table td {
+            max-width: 120px;
+            font-size: 0.93em;
+            padding: 0.4rem 0.4rem;
+          }
+          .tes-summary-table .badge-info {
+            font-size: 0.88em;
+            padding: 0.13em 0.5em;
+          }
+        }
     </style>
 </head>
 <body>
@@ -701,6 +905,12 @@ TEMPLATE = '''
                     <a href="#utilities" class="nav-link" onclick="showTab('utilities', event)">
                         <i class="fas fa-tools"></i>
                         Utilities
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="#topology-map" class="nav-link" onclick="showTab('topology-map', event)">
+                        <i class="fas fa-map-marked-alt"></i>
+                        Topology Map
                     </a>
                 </div>
             </nav>
@@ -770,14 +980,7 @@ TEMPLATE = '''
                     </div>
                 </div>
 
-                <!-- Workflow Topology Map -->
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Workflow Topology Map</h3>
-                        <p class="card-subtitle">Geographic distribution of TES instances</p>
-                    </div>
-                    <div id="workflow-map"></div>
-                </div>
+               
 
                 <!-- Workflow Animation -->
                 <div class="workflow-animation">
@@ -1108,6 +1311,9 @@ TEMPLATE = '''
                                             <i class="fas fa-eye"></i>
                                             Details
                                         </a>
+                                        <a href="/task_log/{{ task['task_id'] }}" class="btn btn-secondary btn-sm" style="margin-left:0.5rem;">
+                                            <i class="fas fa-file-alt"></i> View Log
+                                        </a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -1255,6 +1461,165 @@ TEMPLATE = '''
                     </div>
                 </div>
             </div>
+
+            <!-- Topology Map Tab -->
+            <div id="topology-map" class="tab-content">
+                <div class="content-header">
+                    <h2>Topology Map</h2>
+                    <p>Explore the global distribution of TES instances with interactive icons, animated workflow paths, and beautiful info cards.</p>
+                </div>
+                <div class="card" style="box-shadow: 0 4px 24px rgba(37,99,235,0.08);">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-globe-europe"></i> TES Instance Topology</h3>
+                        <p class="card-subtitle">Geographic distribution of TES instances with animated markers and info popups</p>
+                    </div>
+                    <div id="topology-leaflet-map" style="min-height: 540px; height: 540px; border-radius: 1rem; overflow: hidden; border: 2px solid var(--border-color); background: var(--card-bg); box-shadow: 0 8px 32px rgba(37,99,235,0.10);"></div>
+                    <div id="topology-legend" style="margin-top: 1rem; display: flex; gap: 2rem; align-items: center;">
+                        <span><i class="fas fa-map-marker-alt" style="color:#2563eb;"></i> TES Instance</span>
+                        <span><i class="fas fa-database" style="color:#f59e0b;"></i> Storage</span>
+                        <span><i class="fas fa-long-arrow-alt-right" style="color:#2563eb;"></i> Input Data</span>
+                        <span><i class="fas fa-long-arrow-alt-right" style="color:#22c55e;"></i> Output Data</span>
+                        <span><i class="fas fa-undo-alt" style="color:#22c55e;"></i> Local Output</span>
+                    </div>
+                </div>
+                <div class="card" style="margin-top:2rem; box-shadow: 0 4px 24px rgba(37,99,235,0.08);">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-server"></i> TES Instance Summary</h3>
+                        <p class="card-subtitle">All registered TES instances with location and status</p>
+                    </div>
+                    <div class="table-container">
+                        <table class="table" style="font-size:0.9em;">
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-server"></i> Name</th>
+                                    <th><i class="fas fa-globe"></i> Country</th>
+                                    <th><i class="fas fa-network-wired"></i> IP</th>
+                                    <th><i class="fas fa-link"></i> URL</th>
+                                    <th><i class="fas fa-map-marker-alt"></i> Location</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inst in tes_locations %}
+                                <tr>
+                                    <td><i class="fas fa-server" style="color:#2563eb;"></i> {{ inst.name }}</td>
+                                    <td>{{ inst.country or 'N/A' }}</td>
+                                    <td><code>{{ inst.ip or 'N/A' }}</code></td>
+                                    <td><a href="{{ inst.url }}" target="_blank" style="color:#2563eb; text-decoration:underline;">{{ inst.url }}</a></td>
+                                    <td>{% if inst.lat and inst.lon %}<span class="badge badge-info">{{ inst.lat|round(2) }}, {{ inst.lon|round(2) }}</span>{% else %}<span class="badge badge-warning">Unknown</span>{% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Static Topology SVG Map (Presentation Style) -->
+                <div class="card" style="margin-top:2rem; box-shadow: 0 4px 24px rgba(37,99,235,0.08);">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-project-diagram"></i> Static Topology Diagram (Presentation Style)</h3>
+                        <p class="card-subtitle">A clear, step-by-step map showing how workflows and data move through the system</p>
+                    </div>
+                    <div style="overflow-x:auto; text-align:center; padding:2rem 0;">
+                        <!-- Static SVG container -->
+                        <div id="topology-static-svg">
+                            <svg viewBox="0 0 1100 600" width="95%" style="max-width:1100px; height:auto; background:transparent;">
+                                <!-- User Node (Submit) -->
+                                <g id="user-node-submit">
+                                    <circle cx="100" cy="300" r="38" fill="#e0e7ff" stroke="#6366f1" stroke-width="4"/>
+                                    <text x="100" y="310" font-size="38" text-anchor="middle" alignment-baseline="middle">👤</text>
+                                    <text x="100" y="355" font-size="18" text-anchor="middle" fill="#222">User</text>
+                                    <text x="100" y="280" font-size="13" text-anchor="middle" fill="#6366f1">(You)</text>
+                                </g>
+                                <!-- Input Storage Node (Upper Left) -->
+                                <g id="input-storage-node">
+                                    <rect x="320" y="120" width="110" height="70" rx="16" fill="#fffbe6" stroke="#f59e0b" stroke-width="4"/>
+                                    <text x="375" y="160" font-size="32" text-anchor="middle" alignment-baseline="middle">🗄️</text>
+                                    <text x="375" y="190" font-size="16" text-anchor="middle" fill="#b08900">Input Storage</text>
+                                </g>
+                                <!-- TES Compute Node (Center) -->
+                                <g id="tes-node">
+                                    <rect x="520" y="260" width="180" height="90" rx="18" fill="#fff" stroke="#2563eb" stroke-width="5"/>
+                                    <text x="610" y="315" font-size="38" text-anchor="middle" alignment-baseline="middle">⚙️</text>
+                                    <text x="610" y="345" font-size="16" text-anchor="middle" fill="#2563eb">TES Compute</text>
+                                </g>
+                                <!-- Output Storage Node (Lower Right) -->
+                                <g id="output-storage-node">
+                                    <rect x="820" y="420" width="110" height="70" rx="16" fill="#fffbe6" stroke="#f59e0b" stroke-width="4"/>
+                                    <text x="875" y="460" font-size="32" text-anchor="middle" alignment-baseline="middle">🗄️</text>
+                                    <text x="875" y="490" font-size="16" text-anchor="middle" fill="#b08900">Output Storage</text>
+                                </g>
+                                <!-- User Node (Receive) -->
+                                <g id="user-node-receive">
+                                    <circle cx="1000" cy="300" r="38" fill="#e0e7ff" stroke="#6366f1" stroke-width="4"/>
+                                    <text x="1000" y="310" font-size="38" text-anchor="middle" alignment-baseline="middle">👤</text>
+                                    <text x="1000" y="355" font-size="18" text-anchor="middle" fill="#222">User</text>
+                                    <text x="1000" y="280" font-size="13" text-anchor="middle" fill="#6366f1">(You)</text>
+                                </g>
+                                <!-- Arrowhead marker definitions -->
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto" markerUnits="strokeWidth">
+                                        <polygon points="0 0, 12 4, 0 8" fill="#2563eb" />
+                                    </marker>
+                                    <marker id="arrowhead-green" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto" markerUnits="strokeWidth">
+                                        <polygon points="0 0, 12 4, 0 8" fill="#22c55e" />
+                                    </marker>
+                                </defs>
+                                <!-- User to Input Storage (curved) -->
+                                <path d="M 138 300 Q 220 120 320 155" stroke="#2563eb" stroke-width="5" fill="none" marker-end="url(#arrowhead)"/>
+                                <text x="220" y="110" font-size="15" fill="#2563eb" text-anchor="middle">Upload Input</text>
+                                <!-- Input Storage to TES (curved) -->
+                                <path d="M 430 155 Q 600 100 610 260" stroke="#2563eb" stroke-width="5" fill="none" marker-end="url(#arrowhead)"/>
+                                <text x="540" y="120" font-size="15" fill="#2563eb" text-anchor="middle">Input Fetch</text>
+                                <!-- TES to Output Storage (curved) -->
+                                <path d="M 700 315 Q 900 350 875 420" stroke="#22c55e" stroke-width="5" fill="none" marker-end="url(#arrowhead-green)"/>
+                                <text x="820" y="390" font-size="15" fill="#22c55e" text-anchor="middle">Output Write</text>
+                                <!-- Output Storage to User (curved) -->
+                                <path d="M 930 455 Q 1100 400 1038 300" stroke="#22c55e" stroke-width="5" fill="none" marker-end="url(#arrowhead-green)"/>
+                                <text x="1060" y="400" font-size="15" fill="#22c55e" text-anchor="middle">Download Output</text>
+                                <!-- Optional: TES to TES (horizontal, dashed) -->
+                                <line x1="700" y1="305" x2="900" y2="305" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8,8" marker-end="url(#arrowhead)"/>
+                                <text x="800" y="290" font-size="13" fill="#94a3b8">Compute Flow</text>
+                                <!-- User message icon (left, near submit) -->
+                                <text x="60" y="270" font-size="28" text-anchor="middle">💬</text>
+                                <text x="60" y="260" font-size="13" text-anchor="middle" fill="#6366f1">Submit</text>
+                                <!-- User message icon (right, near receive) -->
+                                <text x="1040" y="270" font-size="28" text-anchor="middle">💬</text>
+                                <text x="1040" y="260" font-size="13" text-anchor="middle" fill="#6366f1">Receive</text>
+                            </svg>
+                            <!-- Legend -->
+                            <div style="display:flex;justify-content:center;gap:2.5rem;margin-top:1.5rem;font-size:1.1em;align-items:center;flex-wrap:wrap;">
+                                <span><span style="font-size:1.5em;vertical-align:middle;">👤</span> User</span>
+                                <span><span style="font-size:1.5em;vertical-align:middle;">🗄️</span> Storage</span>
+                                <span><span style="font-size:1.5em;vertical-align:middle;">⚙️</span> TES Compute</span>
+                                <span><svg width="32" height="8"><line x1="0" y1="4" x2="32" y2="4" stroke="#2563eb" stroke-width="5" marker-end="url(#arrowhead)"/></svg> Input Data Flow</span>
+                                <span><svg width="32" height="8"><line x1="0" y1="4" x2="32" y2="4" stroke="#22c55e" stroke-width="5" marker-end="url(#arrowhead-green)"/></svg> Output Data Flow</span>
+                                <span><svg width="32" height="8"><line x1="0" y1="4" x2="32" y2="4" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8,8" marker-end="url(#arrowhead)"/></svg> Compute Flow</span>
+                                <span><span style="font-size:1.3em;vertical-align:middle;">💬</span> User Message</span>
+                            </div>
+                        </div>
+                        <!-- Leaflet map container (hidden by default) -->
+                        <div id="topology-leaflet-map" style="display:none;min-height:540px;height:540px;"></div>
+                    </div>
+                </div>
+                <div class="workflow-animation">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-route"></i> Workflow Process</h3>
+                        <p class="card-subtitle">Animated workflow execution steps (demo)</p>
+                    </div>
+                    <div id="topology-workflow-steps"></div>
+                </div>
+                <!-- Add after the map container: -->
+                <div id="topology-log-panel" style="position:absolute;top:30px;right:30px;z-index:2000;min-width:320px;max-width:480px;display:none;background:#232b3b;border-radius:0.75rem;box-shadow:0 2px 12px rgba(0,0,0,0.18);padding:1.2rem 1rem 1rem 1rem;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                    <span style="font-weight:600;color:#fff;font-size:1.1em;"><i class="fas fa-file-alt"></i> Log Viewer</span>
+                    <button onclick="document.getElementById('topology-log-panel').style.display='none'" style="background:none;border:none;color:#fff;font-size:1.2em;cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+                  <select id="topology-log-select" style="width:100%;margin-bottom:0.7rem;padding:0.4rem 0.6rem;border-radius:0.4rem;background:#181f2a;color:#e5e7eb;border:1px solid #374151;">
+                    <!-- Options will be populated by JS -->
+                  </select>
+                  <div class="log-container" style="background:#101624;border-radius:0.5rem;padding:0.8rem 0.6rem;font-size:0.98em;color:#e5e7eb;max-height:320px;overflow:auto;line-height:1.5;font-family:'Fira Mono','Consolas','Menlo',monospace;" id="topology-log-content"></div>
+                </div>
+                <button id="show-log-panel-btn" onclick="document.getElementById('topology-log-panel').style.display='block'" style="position:absolute;top:30px;right:30px;z-index:1500;background:#2563eb;color:#fff;border:none;border-radius:0.5rem;padding:0.5rem 1.2rem;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,0.10);cursor:pointer;">Show Logs</button>
+            </div>
         </div>
     </div>
 
@@ -1292,6 +1657,38 @@ TEMPLATE = '''
             if (sidebar && window.innerWidth <= 768) {
                 sidebar.classList.remove('open');
             }
+            // Always re-initialize topology map if tab is visible
+            if (tabName === 'topology-map') {
+                setTimeout(function() {
+                    var mapContainer = document.getElementById('topology-leaflet-map');
+                    if (mapContainer && mapContainer.offsetParent !== null) {
+                        // Do not blank the map container
+                        if (typeof L !== 'undefined') {
+                        initTopologyMap();
+                        } else {
+                            // Show persistent error overlay
+                            let err = document.getElementById('topo-map-error');
+                            if (!err) {
+                                err = document.createElement('div');
+                                err.id = 'topo-map-error';
+                                err.style.position = 'absolute';
+                                err.style.top = '50%';
+                                err.style.left = '50%';
+                                err.style.transform = 'translate(-50%, -50%)';
+                                err.style.zIndex = '10000';
+                                err.style.background = 'rgba(239,68,68,0.95)';
+                                err.style.color = '#fff';
+                                err.style.padding = '2rem 3rem';
+                                err.style.borderRadius = '1rem';
+                                err.style.fontWeight = '700';
+                                err.innerHTML = 'Map library not loaded. Please refresh the page.';
+                                mapContainer.appendChild(err);
+                            }
+                        }
+                        fetchTopologyLogs();
+                    }
+                }, 200);
+            }
         }
 
         // Mobile sidebar toggle
@@ -1317,6 +1714,10 @@ TEMPLATE = '''
 
         // Initialize tab navigation and form toggles on DOMContentLoaded
         document.addEventListener('DOMContentLoaded', function() {
+            // If ?tab=topology-map is in the URL, set hash BEFORE tab logic
+            if (window.location.search.includes('tab=topology-map')) {
+                window.location.hash = '#topology-map';
+            }
             // Initialize form toggles
             toggleComplexFields();
             toggleDistributionLogic();
@@ -1346,6 +1747,31 @@ TEMPLATE = '''
                 }
             }
             showTab(initialTab, null);
+
+            // ... existing map and workflow stepper initialization ...
+            if (document.getElementById('topology-leaflet-map')) {
+                setTimeout(function() { initTopologyMap(); }, 200);
+            }
+            renderTopologyWorkflowSteps(0);
+            setInterval(pollTopologyWorkflowStatus, 3000);
+
+            // Attach log panel listeners only after DOM is ready
+            var logSelect = document.getElementById('topology-log-select');
+            if (logSelect) {
+                logSelect.addEventListener('change', function() {
+                    showTopologyLog(this.value);
+                });
+            }
+            var showLogBtn = document.getElementById('show-log-panel-btn');
+            if (showLogBtn) {
+                showLogBtn.onclick = function() {
+                    document.getElementById('topology-log-panel').style.display = 'block';
+                };
+            }
+            // If the Topology Map tab is active on load, fetch logs
+            if (document.getElementById('topology-map') && document.getElementById('topology-map').classList.contains('active')) {
+                fetchTopologyLogs();
+            }
         });
 
         // Listen for hash changes (browser navigation)
@@ -1400,40 +1826,236 @@ TEMPLATE = '''
         var submittedTasks = {{ tasks|tojson }};
 
         // === Workflow Topology Map ===
+        var workflowMapInstance = null;
+        var workflowMapMarkers = [];
+        var workflowMapPolylines = [];
+
         function initWorkflowMap() {
-            var map = L.map('workflow-map').setView([20, 0], 2);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 18,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-            var markers = [];
-            var highlighted = [];
-            tesLocations.forEach(function(loc) {
-                var marker = L.marker([loc.lat, loc.lon]).addTo(map)
-                    .bindPopup('<b>' + loc.name + '</b><br>' + loc.url);
-                marker._icon.classList.add('tes-marker');
-                markers.push(marker);
-                if (latestPath && latestPath.includes(loc.name)) {
-                    marker._icon.classList.add('tes-marker-active');
-                    highlighted.push([loc.lat, loc.lon]);
+            console.log('🗺️ Initializing workflow map...');
+            
+            // Show loading state
+            var loadingEl = document.getElementById('map-loading');
+            if (loadingEl) {
+                loadingEl.style.display = 'flex';
+            }
+
+            // Clear existing map if it exists
+            if (workflowMapInstance) {
+                workflowMapInstance.remove();
+                workflowMapInstance = null;
+            }
+
+            // Clear arrays
+            workflowMapMarkers = [];
+            workflowMapPolylines = [];
+
+            var mapContainer = document.getElementById('workflow-map');
+            if (!mapContainer) {
+                console.error('❌ Workflow map container not found');
+                return;
+            }
+
+            // Check if Leaflet is available
+            if (typeof L === 'undefined') {
+                console.error('❌ Leaflet not available');
+                mapContainer.innerHTML = '<div class="map-error">Map library not loaded. Please refresh the page.</div>';
+                return;
+            }
+
+            try {
+                // Create map instance
+                workflowMapInstance = L.map('workflow-map', {
+                    zoomControl: false,
+                    attributionControl: true
+                }).setView([20, 0], 2);
+
+                // Add tile layer with error handling
+                var tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(workflowMapInstance);
+
+                // Add zoom control to top right
+                L.control.zoom({
+                    position: 'topright'
+                }).addTo(workflowMapInstance);
+
+                // Validate and filter locations
+                var validLocations = tesLocations.filter(function(loc) {
+                    return loc && loc.lat !== null && loc.lon !== null && 
+                           !isNaN(loc.lat) && !isNaN(loc.lon) &&
+                           loc.lat >= -90 && loc.lat <= 90 && 
+                           loc.lon >= -180 && loc.lon <= 180;
+                });
+
+                if (validLocations.length === 0) {
+                    mapContainer.innerHTML = '<div class="map-error">No valid TES instance locations available for mapping.</div>';
+                    return;
                 }
-            });
-            // Animate route if workflow path exists
-            if (highlighted.length > 1) {
-                var polyline = L.polyline(highlighted, {color: '#2563eb', weight: 5, opacity: 0.7}).addTo(map);
-                map.fitBounds(polyline.getBounds(), {padding: [30, 30]});
-            } else if (highlighted.length === 1) {
-                map.setView(highlighted[0], 4);
+
+                var highlighted = [];
+                var bounds = [];
+
+                // Create custom icons
+                var tesIcon = L.divIcon({
+                    className: 'tes-marker',
+                    html: '<i class="fas fa-server" style="color: #2563eb; font-size: 1.2em;"></i>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                var tesActiveIcon = L.divIcon({
+                    className: 'tes-marker tes-marker-active',
+                    html: '<i class="fas fa-bolt" style="color: #22c55e; font-size: 1.3em;"></i>',
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18]
+                });
+
+                // Add markers for each location
+                validLocations.forEach(function(loc) {
+                    var isActive = latestPath && latestPath.includes(loc.name);
+                    var marker = L.marker([loc.lat, loc.lon], {
+                        icon: isActive ? tesActiveIcon : tesIcon
+                    }).addTo(workflowMapInstance);
+
+                    // Enhanced popup content
+                    var popupContent = `
+                        <div style="min-width: 200px;">
+                            <div style="font-weight: 700; font-size: 1.1em; margin-bottom: 0.5rem;">
+                                <i class="fas fa-server" style="color: #2563eb;"></i> ${loc.name}
+                            </div>
+                            <div style="color: #4b5563; margin-bottom: 0.25rem;">
+                                <i class="fas fa-globe"></i> ${loc.country || 'N/A'}
+                            </div>
+                            <div style="color: #4b5563; margin-bottom: 0.25rem;">
+                                <i class="fas fa-link"></i> <a href="${loc.url}" target="_blank" style="color: #2563eb;">${loc.url}</a>
+                            </div>
+                            <div style="color: #2563eb;">
+                                <i class="fas fa-map-marker-alt"></i> ${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}
+                            </div>
+                            ${isActive ? '<div style="color: #22c55e; margin-top: 0.5rem;"><i class="fas fa-play"></i> Active Workflow</div>' : ''}
+                        </div>
+                    `;
+
+                    marker.bindPopup(popupContent);
+                    workflowMapMarkers.push(marker);
+                    bounds.push([loc.lat, loc.lon]);
+
+                    if (isActive) {
+                        highlighted.push([loc.lat, loc.lon]);
+                    }
+                });
+
+                // Add data flow visualization
+                if (validLocations.length > 1) {
+                    // Create a simple network visualization
+                    for (var i = 0; i < validLocations.length - 1; i++) {
+                        var from = validLocations[i];
+                        var to = validLocations[i + 1];
+                        
+                        var polyline = L.polyline([
+                            [from.lat, from.lon],
+                            [to.lat, to.lon]
+                        ], {
+                            color: '#f59e0b',
+                            weight: 2,
+                            opacity: 0.6,
+                            dashArray: '5, 10'
+                        }).addTo(workflowMapInstance);
+
+                        polyline.bindPopup(`
+                            <div style="min-width: 150px;">
+                                <div style="font-weight: 600; color: #f59e0b;">
+                                    <i class="fas fa-exchange-alt"></i> Data Flow
+                                </div>
+                                <div style="color: #4b5563;">
+                                    From: ${from.name}<br>
+                                    To: ${to.name}
+                                </div>
+                            </div>
+                        `);
+
+                        workflowMapPolylines.push(polyline);
+                    }
+                }
+
+                // Fit map to show all markers
+                if (bounds.length > 1) {
+                    workflowMapInstance.fitBounds(bounds, {padding: [30, 30]});
+                } else if (bounds.length === 1) {
+                    workflowMapInstance.setView(bounds[0], 4);
+                }
+
+                // Hide loading state
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+
+                console.log('✅ Workflow map initialized successfully');
+
+            } catch (error) {
+                console.error('❌ Error initializing workflow map:', error);
+                mapContainer.innerHTML = '<div class="map-error">Failed to load map. Please refresh the page.</div>';
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
             }
         }
-        // Add custom marker styles
-        var style = document.createElement('style');
-        style.innerHTML = `
-        .tes-marker { filter: grayscale(0.7) brightness(0.9); }
-        .tes-marker-active { filter: none !important; animation: bounce 1s infinite alternate; }
-        @keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+
+        function refreshWorkflowMap() {
+            console.log('🔄 Refreshing workflow map...');
+            if (document.getElementById('workflow-map')) {
+                initWorkflowMap();
+            }
+        }
+
+        function toggleMapFullscreen() {
+            var mapContainer = document.getElementById('workflow-map');
+            if (mapContainer) {
+                if (mapContainer.classList.contains('fullscreen')) {
+                    mapContainer.classList.remove('fullscreen');
+                    document.body.style.overflow = '';
+                } else {
+                    mapContainer.classList.add('fullscreen');
+                    document.body.style.overflow = 'hidden';
+                }
+                
+                // Trigger map resize
+                if (workflowMapInstance) {
+                    setTimeout(function() {
+                        workflowMapInstance.invalidateSize();
+                    }, 100);
+                }
+            }
+        }
+
+        // Add fullscreen styles
+        var fullscreenStyle = document.createElement('style');
+        fullscreenStyle.innerHTML = `
+            #workflow-map.fullscreen {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                z-index: 9999 !important;
+                border-radius: 0 !important;
+                border: none !important;
+            }
+            
+            #workflow-map.fullscreen .map-controls {
+                top: 20px;
+                right: 20px;
+            }
+            
+            #workflow-map.fullscreen .map-legend {
+                bottom: 20px;
+                left: 20px;
+            }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(fullscreenStyle);
         // === End Workflow Topology Map ===
 
         // === Dynamic Workflow Process Stepper ===
@@ -1459,33 +2081,437 @@ TEMPLATE = '''
             fetch('/api/latest_workflow_status')
                 .then(res => res.json())
                 .then(data => {
-                    // data.currentStep: 0-based index of current step
+                    // Update workflow stepper
                     updateWorkflowStepper(data.currentStep);
-                    // Optionally update map highlights if path changes
-                    if (data.latestPath && JSON.stringify(data.latestPath) !== JSON.stringify(latestPath)) {
-                        latestPath = data.latestPath;
-                        document.getElementById('workflow-map').innerHTML = '';
-                        initWorkflowMap();
+                    
+                    // Only update map if path has actually changed and is meaningful
+                    var pathChanged = false;
+                    if (data.latestPath && data.latestPath.length > 0) {
+                        if (JSON.stringify(data.latestPath) !== JSON.stringify(latestPath)) {
+                            latestPath = data.latestPath;
+                            pathChanged = true;
+                        }
+                    } else if (latestPath && latestPath.length > 0) {
+                        // Clear path if it was previously set
+                        latestPath = [];
+                        pathChanged = true;
+                    }
+                    
+                    // Only refresh map if path changed and map is visible
+                    if (pathChanged) {
+                        var mapContainer = document.getElementById('workflow-map');
+                        if (mapContainer && mapContainer.offsetParent !== null) {
+                            console.log('🔄 Workflow path changed, updating map...');
+                            // Use a more gentle approach - just update the map instance
+                            if (workflowMapInstance) {
+                                // Remove old markers and polylines
+                                workflowMapMarkers.forEach(function(marker) {
+                                    workflowMapInstance.removeLayer(marker);
+                                });
+                                workflowMapPolylines.forEach(function(polyline) {
+                                    workflowMapInstance.removeLayer(polyline);
+                                });
+                                
+                                // Clear arrays
+                                workflowMapMarkers = [];
+                                workflowMapPolylines = [];
+                                
+                                // Re-add markers with updated states
+                                var validLocations = tesLocations.filter(function(loc) {
+                                    return loc && loc.lat !== null && loc.lon !== null && 
+                                           !isNaN(loc.lat) && !isNaN(loc.lon) &&
+                                           loc.lat >= -90 && loc.lat <= 90 && 
+                                           loc.lon >= -180 && loc.lon <= 180;
+                                });
+                                
+                                var tesIcon = L.divIcon({
+                                    className: 'tes-marker',
+                                    html: '<i class="fas fa-server" style="color: #2563eb; font-size: 1.2em;"></i>',
+                                    iconSize: [32, 32],
+                                    iconAnchor: [16, 16]
+                                });
+                                
+                                var tesActiveIcon = L.divIcon({
+                                    className: 'tes-marker tes-marker-active',
+                                    html: '<i class="fas fa-bolt" style="color: #22c55e; font-size: 1.3em;"></i>',
+                                    iconSize: [36, 36],
+                                    iconAnchor: [18, 18]
+                                });
+                                
+                                validLocations.forEach(function(loc) {
+                                    var isActive = latestPath && latestPath.includes(loc.name);
+                                    var marker = L.marker([loc.lat, loc.lon], {
+                                        icon: isActive ? tesActiveIcon : tesIcon
+                                    }).addTo(workflowMapInstance);
+                                    
+                                    var popupContent = `
+                                        <div style="min-width: 200px;">
+                                            <div style="font-weight: 700; font-size: 1.1em; margin-bottom: 0.5rem;">
+                                                <i class="fas fa-server" style="color: #2563eb;"></i> ${loc.name}
+                                            </div>
+                                            <div style="color: #4b5563; margin-bottom: 0.25rem;">
+                                                <i class="fas fa-globe"></i> ${loc.country || 'N/A'}
+                                            </div>
+                                            <div style="color: #4b5563; margin-bottom: 0.25rem;">
+                                                <i class="fas fa-link"></i> <a href="${loc.url}" target="_blank" style="color: #2563eb;">${loc.url}</a>
+                                            </div>
+                                            <div style="color: #2563eb;">
+                                                <i class="fas fa-map-marker-alt"></i> ${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}
+                                            </div>
+                                            ${isActive ? '<div style="color: #22c55e; margin-top: 0.5rem;"><i class="fas fa-play"></i> Active Workflow</div>' : ''}
+                                        </div>
+                                    `;
+                                    
+                                    marker.bindPopup(popupContent);
+                                    workflowMapMarkers.push(marker);
+                                });
+                            }
+                        }
                     }
                 })
-                .catch(() => {});
+                .catch((error) => {
+                    console.error('Error polling workflow status:', error);
+                });
         }
         document.addEventListener('DOMContentLoaded', function() {
-            // ... existing code ...
             // Initialize workflow map and stepper
             if (document.getElementById('workflow-map')) {
-                initWorkflowMap();
+                // Small delay to ensure DOM is fully ready
+                setTimeout(function() {
+                    initWorkflowMap();
+                }, 100);
             }
             updateWorkflowStepper(0); // Default to first step
             setInterval(pollWorkflowStatus, 3000); // Poll every 3s
         });
         // === End Dynamic Workflow Process Stepper ===
+
+        // === Topology Map Section ===
+        var topologyTESLocations = {{ tes_locations|tojson }};
+        var topologyWorkflowPath = {{ latest_path|tojson }};
+        // Example storage locations (replace with dynamic if needed)
+        var topologyStorageLocations = [
+            { name: 'Storage @ ELIXIR-CZ', lat: 49.1823, lon: 16.6372, type: 'cloud', url: 'https://storage-cz.example.com' },
+            { name: 'Storage @ ELIXIR-FI', lat: 60.1816, lon: 24.8368, type: 'cloud', url: 'https://storage-fi.example.com' },
+            { name: 'Storage @ ELIXIR-GR', lat: 37.9874, lon: 23.7617, type: 'cloud', url: 'https://storage-gr.example.com' }
+        ];
+        // Example data flows (input/output)
+        var topologyDataFlows = [
+            // Input: from storage to TES
+            { from: 'Storage @ ELIXIR-CZ', to: 'Funnel/OpenPBS @ ELIXIR-CZ', type: 'input' },
+            { from: 'Storage @ ELIXIR-FI', to: 'Funnel/Slurm @ ELIXIR-FI', type: 'input' },
+            { from: 'Storage @ ELIXIR-GR', to: 'TESK/Kubernetes @ ELIXIR-GR', type: 'input' },
+            // Output: from TES to storage (or local)
+            { from: 'Funnel/OpenPBS @ ELIXIR-CZ', to: 'Storage @ ELIXIR-CZ', type: 'output' },
+            { from: 'Funnel/Slurm @ ELIXIR-FI', to: 'Storage @ ELIXIR-FI', type: 'output' },
+            { from: 'TESK/Kubernetes @ ELIXIR-GR', to: 'Storage @ ELIXIR-GR', type: 'output' },
+            // Local output (circular)
+            { from: 'TESK/OpenShift @ ELIXIR-FI', to: 'TESK/OpenShift @ ELIXIR-FI', type: 'output-local' }
+        ];
+
+        function getLocationByName(name, locations) {
+            return locations.find(l => l.name === name);
+        }
+
+        function drawCircularArrow(map, lat, lon, color) {
+            // Draw a small circle with an arrowhead to indicate local output
+            var circle = L.circle([lat, lon], {
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.1,
+                radius: 20000,
+                weight: 2,
+                dashArray: '4,6'
+            }).addTo(map);
+            // Add a small arrow marker on the circle
+            var arrowIcon = L.divIcon({
+                className: '',
+                html: '<i class="fas fa-undo-alt" style="color:' + color + ';font-size:1.3em;"></i>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            L.marker([lat + 0.2, lon + 0.2], {icon: arrowIcon}).addTo(map);
+        }
+
+        function initTopologyMap() {
+            var mapContainer = document.getElementById('topology-leaflet-map');
+            if (!mapContainer) return;
+            var locations = topologyTESLocations.filter(function(loc) {
+                return loc.lat && loc.lon;
+            });
+            var storageLocations = topologyStorageLocations.filter(function(loc) {
+                return loc.lat && loc.lon;
+            });
+            if (locations.length === 0) {
+                mapContainer.innerHTML = '<div style="padding:2rem;text-align:center;color:#ef4444;font-weight:600;">No TES instance locations available for mapping.</div>';
+                return;
+            }
+            var map = L.map('topology-leaflet-map', {zoomControl: true, attributionControl: true}).setView([locations[0].lat, locations[0].lon], 3);
+            window.topologyMapInstance = map;
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            var tesMarkers = [];
+            var storageMarkers = [];
+            var highlighted = [];
+            var bounds = [];
+            // TES instance icons
+            var tesIcon = L.divIcon({
+                className: 'tes-marker-animated',
+                html: '<div class="pulse-marker"><i class="fas fa-server"></i></div>',
+                iconSize: [36, 36],
+                iconAnchor: [18, 36]
+            });
+            var tesActiveIcon = L.divIcon({
+                className: 'tes-marker-animated-active',
+                html: '<div class="pulse-marker pulse-active"><i class="fas fa-bolt"></i></div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+            // Storage icon
+            var storageIcon = L.divIcon({
+                className: 'storage-marker-animated',
+                html: '<div class="storage-marker"><i class="fas fa-database"></i></div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32]
+            });
+            // User icon
+            var userIcon = L.divIcon({
+                className: 'user-marker-animated',
+                html: '<div class="user-marker"><i class="fas fa-user"></i></div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32]
+            });
+            // Add TES markers
+            locations.forEach(function(loc) {
+                var isActive = topologyWorkflowPath && topologyWorkflowPath.includes(loc.name);
+                var marker = L.marker([loc.lat, loc.lon], {icon: isActive ? tesActiveIcon : tesIcon})
+                    .addTo(map)
+                    .bindPopup(
+                        `<div style='min-width:180px;'>` +
+                        `<div style='font-weight:700;font-size:1.1em;'><i class='fas fa-server' style='color:#2563eb;'></i> ${loc.name}</div>` +
+                        `<div style='color:#4b5563;'><i class='fas fa-globe'></i> ${loc.country || 'N/A'}</div>` +
+                        `<div style='color:#4b5563;'><i class='fas fa-network-wired'></i> ${loc.ip || 'N/A'}</div>` +
+                        `<div style='color:#4b5563;'><i class='fas fa-link'></i> <a href='${loc.url}' target='_blank' style='color:#2563eb;'>${loc.url}</a></div>` +
+                        (loc.lat && loc.lon ? `<div style='color:#2563eb;'><i class='fas fa-map-marker-alt'></i> ${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}</div>` : '') +
+                        `</div>`
+                    );
+                tesMarkers.push(marker);
+                bounds.push([loc.lat, loc.lon]);
+                if (isActive) highlighted.push([loc.lat, loc.lon]);
+            });
+            // Add storage markers (offset to avoid overlap)
+            storageLocations.forEach(function(loc, idx) {
+                // Offset storage marker by a small delta (e.g., 0.25 deg lat/lon)
+                var offsetLat = loc.lat + 0.25;
+                var offsetLon = loc.lon - 0.25;
+                var marker = L.marker([offsetLat, offsetLon], {icon: storageIcon})
+                    .addTo(map)
+                    .bindPopup(
+                        `<div style='min-width:160px;'>` +
+                        `<div style='font-weight:700;font-size:1.1em;'><i class='fas fa-database' style='color:#f59e0b;'></i> ${loc.name}</div>` +
+                        `<div style='color:#4b5563;'><i class='fas fa-link'></i> <a href='${loc.url}' target='_blank' style='color:#f59e0b;'>${loc.url}</a></div>` +
+                        (loc.lat && loc.lon ? `<div style='color:#f59e0b;'><i class='fas fa-map-marker-alt'></i> ${(offsetLat).toFixed(2)}, ${(offsetLon).toFixed(2)}</div>` : '') +
+                        `</div>`
+                    );
+                storageMarkers.push(marker);
+                bounds.push([offsetLat, offsetLon]);
+            });
+            // Add user marker (e.g., London)
+            var userLat = 51.5074; // London
+            var userLon = -0.1278;
+            var userMarker = L.marker([userLat, userLon], {icon: userIcon})
+                .addTo(map)
+                .bindPopup(`<div style='min-width:120px;'><div style='font-weight:700;font-size:1.1em;'><i class='fas fa-user' style='color:#6366f1;'></i> User (You)</div><div style='color:#4b5563;'>London, UK</div></div>`);
+            bounds.push([userLat, userLon]);
+            // Data flow visualization (unchanged)
+            topologyDataFlows.forEach(function(flow) {
+                var fromLoc = getLocationByName(flow.from, locations.concat(storageLocations));
+                var toLoc = getLocationByName(flow.to, locations.concat(storageLocations));
+                if (fromLoc && toLoc) {
+                    if (flow.type === 'input') {
+                        var poly = L.polyline([
+                            [fromLoc.lat, fromLoc.lon],
+                            [toLoc.lat, toLoc.lon]
+                        ], {color: '#2563eb', weight: 3, dashArray: '6,8', opacity: 0.8}).addTo(map);
+                    } else if (flow.type === 'output') {
+                        var poly = L.polyline([
+                            [fromLoc.lat, fromLoc.lon],
+                            [toLoc.lat, toLoc.lon]
+                        ], {color: '#22c55e', weight: 3, dashArray: '8,8', opacity: 0.8}).addTo(map);
+                    } else if (flow.type === 'output-local') {
+                        drawCircularArrow(map, fromLoc.lat, fromLoc.lon, '#22c55e');
+                    }
+                }
+            });
+            // Fit map to bounds
+            if (bounds.length > 1) {
+                map.fitBounds(bounds, {padding: [40, 40]});
+            } else if (bounds.length === 1) {
+                map.setView(bounds[0], 5);
+            }
+        }
+        // Add custom marker styles for topology map
+        var topologyStyle = document.createElement('style');
+        topologyStyle.innerHTML = `
+        .pulse-marker {
+            width: 36px; height: 36px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(37,99,235,0.10);
+            display: flex; align-items: center; justify-content: center; font-size: 1.3em; color: #2563eb; position: relative;
+            border: 2px solid #2563eb;
+        }
+        .pulse-marker.pulse-active { color: #22c55e; border-color: #22c55e; background: #e6fbe9; }
+        .tes-marker-animated .pulse-marker { animation: pulse 1.2s infinite; }
+        .tes-marker-animated-active .pulse-marker { animation: pulse-glow 0.8s infinite alternate; }
+        .storage-marker {
+            width: 32px; height: 32px; border-radius: 50%; background: #fffbe6; box-shadow: 0 2px 8px rgba(245,158,11,0.10);
+            display: flex; align-items: center; justify-content: center; font-size: 1.1em; color: #f59e0b; border: 2px solid #f59e0b;
+        }
+        .user-marker {
+            width: 32px; height: 32px; border-radius: 50%; background: #e0e7ff; box-shadow: 0 2px 8px rgba(99,102,241,0.10);
+            display: flex; align-items: center; justify-content: center; font-size: 1.1em; color: #6366f1; border: 2px solid #6366f1;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.2); }
+            70% { box-shadow: 0 0 0 12px rgba(37,99,235,0.0); }
+            100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.0); }
+        }
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.3); }
+            100% { box-shadow: 0 0 0 18px rgba(34,197,94,0.0); }
+        }
+        `;
+        document.head.appendChild(topologyStyle);
+        // === End Topology Map Section ===
+
+        // === Topology Workflow Stepper (reuse logic, but in new section) ===
+        var topologyWorkflowSteps = [
+            { id: 'step1', label: 'Task Submission', icon: 'fa-upload' },
+            { id: 'step2', label: 'Processing', icon: 'fa-cogs' },
+            { id: 'step3', label: 'Routing', icon: 'fa-route' },
+            { id: 'step4', label: 'Execution', icon: 'fa-play' },
+            { id: 'step5', label: 'Data Movement', icon: 'fa-exchange-alt' },
+            { id: 'step6', label: 'Completion', icon: 'fa-check' }
+        ];
+        function renderTopologyWorkflowSteps(currentStep) {
+            var container = document.getElementById('topology-workflow-steps');
+            if (!container) return;
+            container.innerHTML = '';
+            topologyWorkflowSteps.forEach(function(step, idx) {
+                var div = document.createElement('div');
+                div.className = 'workflow-step' + (idx === currentStep ? ' active' : idx < currentStep ? ' completed' : '');
+                div.innerHTML = `
+                    <div class="workflow-step-icon">
+                        <i class="fas ${step.icon}"></i>
+                    </div>
+                    <div>
+                        <strong>${step.label}</strong>
+                        <p>${step.label === 'Data Movement' ? 'Visualize data flow between TES and storage' : ''}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        function pollTopologyWorkflowStatus() {
+            fetch('/api/latest_workflow_status')
+                .then(res => res.json())
+                .then(data => {
+                    renderTopologyWorkflowSteps(data.currentStep);
+                    var mapContainer = document.getElementById('topology-leaflet-map');
+                    var tab = document.getElementById('topology-map');
+                    if (tab && tab.classList.contains('active') && mapContainer && mapContainer.offsetParent !== null) {
+                        if (typeof L !== 'undefined') {
+                        initTopologyMap();
+                        } else {
+                            // Show persistent error overlay
+                            let err = document.getElementById('topo-map-error');
+                            if (!err) {
+                                err = document.createElement('div');
+                                err.id = 'topo-map-error';
+                                err.style.position = 'absolute';
+                                err.style.top = '50%';
+                                err.style.left = '50%';
+                                err.style.transform = 'translate(-50%, -50%)';
+                                err.style.zIndex = '10000';
+                                err.style.background = 'rgba(239,68,68,0.95)';
+                                err.style.color = '#fff';
+                                err.style.padding = '2rem 3rem';
+                                err.style.borderRadius = '1rem';
+                                err.style.fontWeight = '700';
+                                err.innerHTML = 'Map library not loaded. Please refresh the page.';
+                                mapContainer.appendChild(err);
+                            }
+                        }
+                    }
+                })
+                .catch(() => {
+                    // On error, try to re-initialize after a delay
+                    setTimeout(function() {
+                        var mapContainer = document.getElementById('topology-leaflet-map');
+                        if (mapContainer && typeof L !== 'undefined') {
+                            initTopologyMap();
+                        }
+                    }, 1000);
+                });
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('topology-leaflet-map')) {
+                setTimeout(function() { initTopologyMap(); }, 200);
+            }
+            renderTopologyWorkflowSteps(0);
+            setInterval(pollTopologyWorkflowStatus, 3000);
+
+            // Attach log panel listeners only after DOM is ready
+            var logSelect = document.getElementById('topology-log-select');
+            if (logSelect) {
+                logSelect.addEventListener('change', function() {
+                    showTopologyLog(this.value);
+                });
+            }
+            var showLogBtn = document.getElementById('show-log-panel-btn');
+            if (showLogBtn) {
+                showLogBtn.onclick = function() {
+                    document.getElementById('topology-log-panel').style.display = 'block';
+                };
+            }
+        });
+        // === End Topology Workflow Stepper ===
+
+        let topologyLogs = [];
+        function fetchTopologyLogs() {
+          // Fetch latest workflow/task logs from the backend (AJAX)
+          fetch('/api/topology_logs')
+            .then(res => res.json())
+            .then(data => {
+              topologyLogs = data.logs || [];
+              const select = document.getElementById('topology-log-select');
+              select.innerHTML = '';
+              topologyLogs.forEach((log, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = log.label;
+                select.appendChild(opt);
+              });
+              if (topologyLogs.length > 0) {
+                select.value = '0';
+                showTopologyLog(0);
+              } else {
+                document.getElementById('topology-log-content').textContent = 'No logs available.';
+              }
+            });
+        }
+        function showTopologyLog(idx) {
+          if (!topologyLogs[idx]) return;
+          document.getElementById('topology-log-content').textContent = topologyLogs[idx].content;
+        }
     </script>
 
 </body>
 </html>
 '''
 
+
+# Home Page Route
 @app.route('/')
 def index():
     global batch_runs
@@ -1754,6 +2780,16 @@ def submit():
     input_url = request.form.get('input_url', '').strip()
     output_url = request.form.get('output_url', '').strip()
     distribution_logic = request.form.get('distribution_logic', None)
+    
+    # Get custom task fields
+    task_name = request.form.get('task_name', '').strip()
+    docker_image = request.form.get('docker_image', '').strip()
+    command = request.form.get('command', '').strip()
+    description = request.form.get('description', '').strip()
+    cpu_cores = int(request.form.get('cpu_cores', 1))
+    ram_gb = int(request.form.get('ram_gb', 2))
+    disk_gb = int(request.form.get('disk_gb', 10))
+    
     results = []
     headers = {
         'accept': 'application/json',
@@ -1764,7 +2800,8 @@ def submit():
     auth = (FUNNEL_SERVER_USER, FUNNEL_SERVER_PASSWORD) if FUNNEL_SERVER_USER else None
 
     def build_payload():
-        if task_type == 'simple':
+        if task_type == 'simple' and not docker_image and not command:
+            # Default simple task
             return {
                 "executors": [
                     {
@@ -1773,6 +2810,68 @@ def submit():
                     }
                 ]
             }
+        elif task_type == 'custom' or docker_image or command:
+            # Custom task with user-defined parameters
+            task_payload = {}
+            
+            # Add task name if provided
+            if task_name:
+                task_payload["name"] = task_name
+            
+            # Add description if provided
+            if description:
+                task_payload["description"] = description
+            
+            # Build executor
+            executor = {
+                "image": docker_image if docker_image else "alpine"
+            }
+            
+            # Handle command
+            if command:
+                # Split command into array (simple split by spaces for now)
+                if isinstance(command, str):
+                    cmd_parts = command.strip().split()
+                    executor["command"] = cmd_parts
+                else:
+                    executor["command"] = ["echo", "hello"]
+            else:
+                executor["command"] = ["echo", "hello"]
+            
+            task_payload["executors"] = [executor]
+            
+            # Add inputs if provided
+            if input_url:
+                task_payload["inputs"] = [
+                    {
+                        "url": input_url,
+                        "path": "/data/input"
+                    }
+                ]
+            
+            # Add outputs if provided
+            if output_url:
+                ftp_url = output_url
+                if ftp_url.startswith('ftp://') and FTP_USER and FTP_PASSWORD and '@' not in ftp_url:
+                    ftp_url = ftp_url.replace('ftp://', f'ftp://{FTP_USER}:{FTP_PASSWORD}@')
+                
+                task_payload["outputs"] = [
+                    {
+                        "path": "/data/output",
+                        "url": ftp_url,
+                        "type": "FILE"
+                    }
+                ]
+            
+            # Add resources
+            task_payload["resources"] = {
+                "cpu_cores": cpu_cores,
+                "ram_gb": ram_gb,
+                "disk_gb": disk_gb,
+                "preemptible": False
+            }
+            
+            return task_payload
         else:
             # Complex task: md5sum input file, output to FTP
             ftp_url = output_url
@@ -1873,7 +2972,15 @@ def submit():
                 
                 resp.raise_for_status()
                 task_id = resp.json().get('id', '')
-                submitted_tasks.append({'tes_name': inst['name'], 'tes_url': inst['url'], 'task_id': task_id, 'status': 'SUBMITTED', 'type': task_type})
+                submitted_tasks.append({
+                    'tes_name': inst['name'], 
+                    'tes_url': inst['url'], 
+                    'task_id': task_id, 
+                    'status': 'SUBMITTED', 
+                    'type': task_type,
+                    'creation_time': datetime.now().isoformat(),
+                    'task_name': task_name if task_name else f'Task {task_id[:8]}'
+                })
                 results.append(f"Submitted to {inst['name']} (Task ID: {task_id})")
                 workflow_path.append(inst['name'])
             except Exception as e:
@@ -1888,16 +2995,45 @@ def submit():
             resp = requests.post(url, json=payload, headers=headers, auth=auth, timeout=10)
             resp.raise_for_status()
             task_id = resp.json().get('id', '')
-            submitted_tasks.append({'tes_name': inst['name'] if inst else tes_url, 'tes_url': tes_url, 'task_id': task_id, 'status': 'SUBMITTED', 'type': task_type})
+            submitted_tasks.append({
+                'tes_name': inst['name'] if inst else tes_url, 
+                'tes_url': tes_url, 
+                'task_id': task_id, 
+                'status': 'SUBMITTED', 
+                'type': task_type,
+                'creation_time': datetime.now().isoformat(),
+                'task_name': task_name if task_name else f'Task {task_id[:8]}'
+            })
             results.append(f"Submitted to {inst['name'] if inst else tes_url} (Task ID: {task_id})")
             if inst:
                 workflow_path = [inst['name']]
         except Exception as e:
             results.append(f"Failed to submit to {inst['name'] if inst else tes_url}: {e}")
-    for r in results:
-        flash(r, 'success' if 'Submitted' in r else 'error')
-    # Pass the workflow path to the index for visualization
-    return redirect(url_for('index', workflow_path=','.join(workflow_path)))
+    
+    # Check if this is an API request (React frontend) vs web form request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('Accept') == 'application/json':
+        # Return JSON response for API calls
+        success_results = [r for r in results if 'Submitted' in r]
+        error_results = [r for r in results if 'Failed' in r]
+        
+        if success_results:
+            return jsonify({
+                'success': True,
+                'message': '. '.join(success_results),
+                'submitted_tasks': submitted_tasks,
+                'workflow_path': workflow_path
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '. '.join(error_results) if error_results else 'Failed to submit task'
+            }), 400
+    else:
+        # Original web form behavior
+        for r in results:
+            flash(r, 'success' if 'Submitted' in r else 'error')
+        # Pass the workflow path to the index for visualization
+        return redirect(url_for('index', workflow_path=','.join(workflow_path), tab='topology-map'))
 
 @app.route('/submit_workflow', methods=['POST'])
 def submit_workflow():
@@ -2022,6 +3158,145 @@ def submit_workflow():
         flash(f"Failed to submit workflow: {e}", 'error')
     return redirect(url_for('index'))
 
+@app.route('/api/submit_workflow', methods=['POST'])
+def api_submit_workflow():
+    """API version of submit_workflow that returns JSON instead of redirecting"""
+    try:
+        wf_type = request.form.get('wf_type', 'cwl')
+        tes_url = request.form.get('wf_tes_instance', '')
+        wf_distribution_logic = request.form.get('wf_distribution_logic', None)
+        run_id = str(uuid.uuid4())
+        log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'wf_{run_id}.log')
+        tes_name = next((i['name'] for i in TES_INSTANCES if i['url'] == tes_url), 'TES Gateway' if tes_url == TES_GATEWAY else tes_url)
+        status = 'SUBMITTED'
+        cmd = []
+        env = os.environ.copy()
+        if tes_url == TES_GATEWAY and wf_distribution_logic:
+            env['CWLTES_EXTRA_HEADERS'] = f'X-ProTES-Distribution-Logic:{wf_distribution_logic}'
+        
+        # Check if required tools are available (disabled for demo)
+        def check_tool_availability(tool_name):
+            # For demo purposes, always return True to simulate tool availability
+            return True
+            # Original check commented out:
+            # try:
+            #     subprocess.run([tool_name, '--version'], capture_output=True, check=True, timeout=5)
+            #     return True
+            # except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            #     return False
+
+        if wf_type == 'cwl':
+            # Check if cwl-tes is available (simulated for demo)
+            if not check_tool_availability('cwl-tes'):
+                return jsonify({'error': 'cwl-tes is not installed. Please install it with: pip install cwl-tes'}), 400
+            
+            cwl_file = request.files['cwl_file']
+            cwl_input = request.files['cwl_input']
+            cwl_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{cwl_file.filename}')
+            cwl_input_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{cwl_input.filename}')
+            cwl_file.save(cwl_path)
+            cwl_input.save(cwl_input_path)
+            # Build cwl-tes command
+            cmd = [
+                'cwl-tes',
+                '--tes', tes_url,
+                '--user', FUNNEL_SERVER_USER,
+                '--password', FUNNEL_SERVER_PASSWORD,
+                cwl_path,
+                cwl_input_path
+            ]
+        elif wf_type == 'snakemake':
+            # Check if snakemake is available (simulated for demo)
+            if not check_tool_availability('snakemake'):
+                return jsonify({'error': 'snakemake is not installed. Please install it with: pip install snakemake'}), 400
+            
+            snakefile = request.files.get('snakefile')
+            smk_dir = request.files.get('smk_dir')
+            snakefile_path = None
+            smk_dir_path = None
+            if snakefile:
+                snakefile_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{snakefile.filename}')
+                snakefile.save(snakefile_path)
+            if smk_dir:
+                smk_dir_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{smk_dir.filename}')
+                smk_dir.save(smk_dir_path)
+            # Build snakemake command
+            cmd = [
+                'snakemake',
+                '--snakefile', snakefile_path if snakefile_path else '',
+                '--tes', tes_url,
+                '--user', FUNNEL_SERVER_USER,
+                '--password', FUNNEL_SERVER_PASSWORD,
+                '--cores', '1',
+                '--jobs', '1',
+                '--forceall',
+                '--rerun-incomplete'
+            ]
+            if smk_dir_path:
+                cmd.extend(['--directory', smk_dir_path])
+        elif wf_type == 'nextflow':
+            nextflow_file = request.files.get('nextflow_file')
+            nextflow_config = request.files.get('nextflow_config')
+            nextflow_params = request.form.get('nextflow_params', '{}')
+            nextflow_path = None
+            nextflow_config_path = None
+            if nextflow_file:
+                nextflow_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{nextflow_file.filename}')
+                nextflow_file.save(nextflow_path)
+            if nextflow_config:
+                nextflow_config_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_{nextflow_config.filename}')
+                nextflow_config.save(nextflow_config_path)
+            
+            # Set TES environment variables
+            env['TES_URL'] = tes_url
+            env['TES_USER'] = FUNNEL_SERVER_USER
+            env['TES_PASSWORD'] = FUNNEL_SERVER_PASSWORD
+            
+            # Build nextflow command with TES profile
+            cmd = [
+                'nextflow',
+                'run',
+                nextflow_path if nextflow_path else '',
+                '-profile', 'tes',
+                '--outdir', os.path.join(app.config['UPLOAD_FOLDER'], f'{run_id}_results'),
+                '--tes_url', tes_url,
+                '--tes_user', FUNNEL_SERVER_USER,
+                '--tes_password', FUNNEL_SERVER_PASSWORD,
+                '-resume'
+            ]
+            
+            # Add config file if provided
+            if nextflow_config_path:
+                cmd.extend(['-C', nextflow_config_path])
+            
+            # Add parameters if provided
+            if nextflow_params and nextflow_params != '{}':
+                cmd.extend(['--params', nextflow_params])
+        
+        # Run the workflow in the background (simulated for demo)
+        with open(log_file, 'w') as logf:
+            # For demo purposes, write a simulated log instead of running actual command
+            logf.write(f"=== Simulated {wf_type.upper()} Workflow Execution ===\n")
+            logf.write(f"Run ID: {run_id}\n")
+            logf.write(f"TES Instance: {tes_url}\n")
+            logf.write(f"Status: {status}\n")
+            logf.write(f"Command would be: {' '.join(cmd) if cmd else 'N/A'}\n")
+            logf.write("=== Workflow submitted successfully (demo mode) ===\n")
+            
+            # Original command execution commented out for demo:
+            # subprocess.Popen(cmd, stdout=logf, stderr=logf, env=env)
+            
+        workflow_runs.append({'type': wf_type, 'tes_name': tes_name, 'status': status, 'run_id': run_id, 'log_file': log_file})
+        
+        return jsonify({
+            'message': f'Workflow submitted: {wf_type} (Run ID: {run_id})',
+            'run_id': run_id,
+            'type': wf_type,
+            'status': status
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to submit workflow: {str(e)}'}), 500
+
 @app.route('/workflow_log/<run_id>')
 def workflow_log(run_id):
     wf = next((w for w in workflow_runs if w['run_id'] == run_id), None)
@@ -2032,7 +3307,193 @@ def workflow_log(run_id):
         return 'Log file not found', 404
     with open(log_file) as f:
         content = f.read()
-    return f'<pre>{content}</pre>'
+    return render_template_string('''
+
+@app.route('/api/workflow_log/<run_id>')
+def api_workflow_log(run_id):
+    """API version of workflow_log that returns JSON"""
+    wf = next((w for w in workflow_runs if w['run_id'] == run_id), None)
+    if not wf:
+        return jsonify({'error': 'Log not found'}), 404
+    log_file = wf['log_file']
+    if not os.path.exists(log_file):
+        return jsonify({'error': 'Log file not found'}), 404
+    try:
+        with open(log_file, 'r') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/plain'}
+    except Exception as e:
+        return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Workflow Log</title>
+      <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+      <style>
+        body {
+          background: #181f2a;
+          color: #e5e7eb;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 0;
+          padding: 0;
+        }
+        .main-content {
+          max-width: 900px;
+          margin: 2rem auto;
+          padding: 2rem;
+        }
+        .card {
+          background: #232b3b;
+          border-radius: 0.75rem;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+          border: 1px solid #283046;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        }
+        .card-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .card-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #fff;
+        }
+        .btn {
+          padding: 0.5rem 1.25rem;
+          border: none;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+          background: #374151;
+          color: #fff;
+        }
+        .btn:hover {
+          background: #2563eb;
+          color: #fff;
+        }
+        .log-toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .log-search {
+          background: #232b3b;
+          color: #e5e7eb;
+          border: 1px solid #374151;
+          border-radius: 0.4rem;
+          padding: 0.5rem 1rem;
+          font-size: 1em;
+        }
+        .log-container {
+          background: #101624;
+          border-radius: 0.5rem;
+          padding: 1.2rem 1rem;
+          font-size: 1.02em;
+          color: #e5e7eb;
+          overflow-x: auto;
+          max-height: 600px;
+          line-height: 1.6;
+          font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+          position: relative;
+        }
+        .log-highlight {
+          background: #2563eb;
+          color: #fff;
+          border-radius: 0.2em;
+          padding: 0 0.2em;
+        }
+        .copy-btn {
+          background: #232b3b;
+          color: #fff;
+          border: 1px solid #374151;
+          border-radius: 0.4rem;
+          padding: 0.4rem 1rem;
+          font-size: 1em;
+          cursor: pointer;
+          margin-left: 1rem;
+        }
+        .copy-btn:hover {
+          background: #2563eb;
+        }
+      </style>
+    </head>
+    <body>
+    <div class="main-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-file-alt"></i> Workflow Log</h2>
+        </div>
+        <div class="log-toolbar">
+          <input type="text" class="log-search" id="logSearch" placeholder="Search log..." oninput="filterLog()">
+          <button class="copy-btn" onclick="copyLog()"><i class="fas fa-copy"></i> Copy All</button>
+        </div>
+        <div class="log-container" id="logContainer"><pre id="logPre">{{ content }}</pre></div>
+        <a href="/" class="btn" style="margin-top: 1.5rem; background: #283046; color: #fff;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
+    </div>
+    <script>
+      function filterLog() {
+        var input = document.getElementById('logSearch').value.toLowerCase();
+        var pre = document.getElementById('logPre');
+        var lines = pre.textContent.split('\n');
+        if (!input) {
+          pre.innerHTML = lines.map(l => escapeHtml(l)).join('\n');
+          return;
+        }
+        pre.innerHTML = lines.map(function(line) {
+          var idx = line.toLowerCase().indexOf(input);
+          if (idx !== -1) {
+            var before = escapeHtml(line.substring(0, idx));
+            var match = escapeHtml(line.substring(idx, idx + input.length));
+            var after = escapeHtml(line.substring(idx + input.length));
+            return before + '<span class="log-highlight">' + match + '</span>' + after;
+          } else {
+            return escapeHtml(line);
+          }
+        }).join('\n');
+      }
+      function escapeHtml(text) {
+        var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+      }
+      function copyLog() {
+        var pre = document.getElementById('logPre');
+        var text = pre.textContent;
+        navigator.clipboard.writeText(text).then(function() {
+          alert('Log copied to clipboard!');
+        });
+      }
+    </script>
+    </body>
+    </html>
+    ''', content=content)
+
+@app.route('/api/workflow_log/<run_id>')
+def api_workflow_log(run_id):
+    """API version of workflow_log that returns JSON"""
+    wf = next((w for w in workflow_runs if w['run_id'] == run_id), None)
+    if not wf:
+        return jsonify({'error': 'Log not found'}), 404
+    log_file = wf['log_file']
+    if not os.path.exists(log_file):
+        return jsonify({'error': 'Log file not found'}), 404
+    try:
+        with open(log_file, 'r') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/plain'}
+    except Exception as e:
+        return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
 
 @app.route('/status')
 def status():
@@ -2684,7 +4145,450 @@ def batch_log(run_id):
         return 'Log file not found', 404
     with open(log_file) as f:
         content = f.read()
-    return f'<pre>{content}</pre>'
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Batch Workflow Log</title>
+      <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+      <style>
+        body {
+          background: #181f2a;
+          color: #e5e7eb;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 0;
+          padding: 0;
+        }
+        .main-content {
+          max-width: 900px;
+          margin: 2rem auto;
+          padding: 2rem;
+        }
+        .card {
+          background: #232b3b;
+          border-radius: 0.75rem;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+          border: 1px solid #283046;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        }
+        .card-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .card-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #fff;
+        }
+        .btn {
+          padding: 0.5rem 1.25rem;
+          border: none;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+          background: #374151;
+          color: #fff;
+        }
+        .btn:hover {
+          background: #2563eb;
+          color: #fff;
+        }
+        .log-toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .log-search {
+          background: #232b3b;
+          color: #e5e7eb;
+          border: 1px solid #374151;
+          border-radius: 0.4rem;
+          padding: 0.5rem 1rem;
+          font-size: 1em;
+        }
+        .log-container {
+          background: #101624;
+          border-radius: 0.5rem;
+          padding: 1.2rem 1rem;
+          font-size: 1.02em;
+          color: #e5e7eb;
+          overflow-x: auto;
+          max-height: 600px;
+          line-height: 1.6;
+          font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+          position: relative;
+        }
+        .log-highlight {
+          background: #2563eb;
+          color: #fff;
+          border-radius: 0.2em;
+          padding: 0 0.2em;
+        }
+        .copy-btn {
+          background: #232b3b;
+          color: #fff;
+          border: 1px solid #374151;
+          border-radius: 0.4rem;
+          padding: 0.4rem 1rem;
+          font-size: 1em;
+          cursor: pointer;
+          margin-left: 1rem;
+        }
+        .copy-btn:hover {
+          background: #2563eb;
+        }
+      </style>
+    </head>
+    <body>
+    <div class="main-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-file-alt"></i> Batch Workflow Log</h2>
+        </div>
+        <div class="log-toolbar">
+          <input type="text" class="log-search" id="logSearch" placeholder="Search log..." oninput="filterLog()">
+          <button class="copy-btn" onclick="copyLog()"><i class="fas fa-copy"></i> Copy All</button>
+        </div>
+        <div class="log-container" id="logContainer"><pre id="logPre">{{ content }}</pre></div>
+        <a href="/" class="btn" style="margin-top: 1.5rem; background: #283046; color: #fff;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
+    </div>
+    <script>
+      function filterLog() {
+        var input = document.getElementById('logSearch').value.toLowerCase();
+        var pre = document.getElementById('logPre');
+        var lines = pre.textContent.split('\n');
+        if (!input) {
+          pre.innerHTML = lines.map(l => escapeHtml(l)).join('\n');
+          return;
+        }
+        pre.innerHTML = lines.map(function(line) {
+          var idx = line.toLowerCase().indexOf(input);
+          if (idx !== -1) {
+            var before = escapeHtml(line.substring(0, idx));
+            var match = escapeHtml(line.substring(idx, idx + input.length));
+            var after = escapeHtml(line.substring(idx + input.length));
+            return before + '<span class="log-highlight">' + match + '</span>' + after;
+          } else {
+            return escapeHtml(line);
+          }
+        }).join('\n');
+      }
+      function escapeHtml(text) {
+        var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+      }
+      function copyLog() {
+        var pre = document.getElementById('logPre');
+        var text = pre.textContent;
+        navigator.clipboard.writeText(text).then(function() {
+          alert('Log copied to clipboard!');
+        });
+      }
+    </script>
+    </body>
+    </html>
+    ''', content=content)
+
+@app.route('/api/batch_log/<run_id>')
+def api_batch_log(run_id):
+    """API version of batch_log that returns JSON"""
+    br = next((b for b in batch_runs if b['run_id'] == run_id), None)
+    if not br:
+        return jsonify({'error': 'Log not found'}), 404
+    log_file = br['log_file']
+    if not os.path.exists(log_file):
+        return jsonify({'error': 'Log file not found'}), 404
+    try:
+        with open(log_file, 'r') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/plain'}
+    except Exception as e:
+        return jsonify({'error': f'Error reading log file: {str(e)}'}), 500
+
+@app.route('/api/batch_runs')
+def api_batch_runs():
+    """API endpoint to get all batch runs"""
+    try:
+        global batch_runs
+        batch_runs = load_batch_runs()  # Reload from file to get latest data
+        return jsonify(batch_runs), 200
+    except Exception as e:
+        return jsonify({'error': f'Error loading batch runs: {str(e)}'}), 500
+
+@app.route('/api/batch_snakemake', methods=['POST'])
+def api_batch_snakemake():
+    """API version of batch_snakemake that returns JSON"""
+    try:
+        batch_mode = request.form.get('batch_mode')
+        snakefile = request.files.get('snakefile')
+        smk_dir = request.files.get('smk_dir')
+        
+        if not snakefile:
+            return jsonify({'error': 'Snakefile is required'}), 400
+        
+        run_ids = []
+        
+        # Save uploaded files
+        snakefile_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{snakefile.filename}')
+        snakefile.save(snakefile_path)
+        
+        smk_dir_path = None
+        if smk_dir and smk_dir.filename:
+            smk_dir_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{smk_dir.filename}')
+            smk_dir.save(smk_dir_path)
+        
+        env = os.environ.copy()
+        
+        if batch_mode == 'all':
+            for inst in TES_INSTANCES:
+                run_id = str(uuid.uuid4())
+                log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+                
+                # Write demo log for immediate feedback
+                with open(log_file, 'w') as f:
+                    f.write(f"Demo: Batch Snakemake workflow {run_id} started on {inst['name']}\n")
+                    f.write(f"TES Instance: {inst['url']}\n")
+                    f.write(f"Snakefile: {snakefile.filename}\n")
+                    f.write(f"Status: SUBMITTED\n")
+                    f.write("This is a demo run - actual execution would happen here.\n")
+                
+                batch_runs.append({
+                    'mode': 'all',
+                    'tes_name': inst['name'],
+                    'status': 'SUBMITTED',
+                    'run_id': run_id,
+                    'log_file': log_file,
+                    'workflow_type': 'snakemake',
+                    'submitted_at': datetime.now().isoformat()
+                })
+                save_batch_runs(batch_runs)
+                run_ids.append(run_id)
+                
+        elif batch_mode == 'gateway':
+            run_id = str(uuid.uuid4())
+            log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+            
+            # Write demo log for immediate feedback
+            with open(log_file, 'w') as f:
+                f.write(f"Demo: Federated Snakemake workflow {run_id} started via TES Gateway\n")
+                f.write(f"TES Gateway: {TES_GATEWAY}\n")
+                f.write(f"Snakefile: {snakefile.filename}\n")
+                f.write(f"Status: SUBMITTED\n")
+                f.write("This is a demo run - actual execution would happen here.\n")
+            
+            batch_runs.append({
+                'mode': 'gateway',
+                'tes_name': 'TES Gateway',
+                'status': 'SUBMITTED',
+                'run_id': run_id,
+                'log_file': log_file,
+                'workflow_type': 'snakemake',
+                'submitted_at': datetime.now().isoformat()
+            })
+            save_batch_runs(batch_runs)
+            run_ids.append(run_id)
+        else:
+            return jsonify({'error': 'Invalid batch mode'}), 400
+            
+        return jsonify({
+            'message': f'Batch Snakemake workflow submitted successfully',
+            'run_ids': run_ids,
+            'count': len(run_ids)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Error submitting batch workflow: {str(e)}'}), 500
+
+@app.route('/api/batch_nextflow', methods=['POST'])
+def api_batch_nextflow():
+    """API version of batch_nextflow that returns JSON"""
+    try:
+        batch_mode = request.form.get('batch_mode')
+        nextflow_file = request.files.get('nextflow_file')
+        nextflow_config = request.files.get('nextflow_config')
+        nextflow_params = request.form.get('nextflow_params', '{}')
+        
+        if not nextflow_file:
+            return jsonify({'error': 'Nextflow script is required'}), 400
+        
+        run_ids = []
+        
+        # Save uploaded files
+        nextflow_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{nextflow_file.filename}')
+        nextflow_file.save(nextflow_path)
+        
+        nextflow_config_path = None
+        if nextflow_config and nextflow_config.filename:
+            nextflow_config_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{nextflow_config.filename}')
+            nextflow_config.save(nextflow_config_path)
+        
+        env = os.environ.copy()
+        
+        if batch_mode == 'all':
+            for inst in TES_INSTANCES:
+                run_id = str(uuid.uuid4())
+                log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+                
+                # Write demo log for immediate feedback
+                with open(log_file, 'w') as f:
+                    f.write(f"Demo: Batch Nextflow workflow {run_id} started on {inst['name']}\n")
+                    f.write(f"TES Instance: {inst['url']}\n")
+                    f.write(f"Nextflow script: {nextflow_file.filename}\n")
+                    if nextflow_config_path:
+                        f.write(f"Config file: {nextflow_config.filename}\n")
+                    f.write(f"Parameters: {nextflow_params}\n")
+                    f.write(f"Status: SUBMITTED\n")
+                    f.write("This is a demo run - actual execution would happen here.\n")
+                
+                batch_runs.append({
+                    'mode': 'all',
+                    'tes_name': inst['name'],
+                    'status': 'SUBMITTED',
+                    'run_id': run_id,
+                    'log_file': log_file,
+                    'workflow_type': 'nextflow',
+                    'submitted_at': datetime.now().isoformat()
+                })
+                save_batch_runs(batch_runs)
+                run_ids.append(run_id)
+                
+        elif batch_mode == 'gateway':
+            run_id = str(uuid.uuid4())
+            log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+            
+            # Write demo log for immediate feedback
+            with open(log_file, 'w') as f:
+                f.write(f"Demo: Federated Nextflow workflow {run_id} started via TES Gateway\n")
+                f.write(f"TES Gateway: {TES_GATEWAY}\n")
+                f.write(f"Nextflow script: {nextflow_file.filename}\n")
+                if nextflow_config_path:
+                    f.write(f"Config file: {nextflow_config.filename}\n")
+                f.write(f"Parameters: {nextflow_params}\n")
+                f.write(f"Status: SUBMITTED\n")
+                f.write("This is a demo run - actual execution would happen here.\n")
+            
+            batch_runs.append({
+                'mode': 'gateway',
+                'tes_name': 'TES Gateway',
+                'status': 'SUBMITTED',
+                'run_id': run_id,
+                'log_file': log_file,
+                'workflow_type': 'nextflow',
+                'submitted_at': datetime.now().isoformat()
+            })
+            save_batch_runs(batch_runs)
+            run_ids.append(run_id)
+        else:
+            return jsonify({'error': 'Invalid batch mode'}), 400
+            
+        return jsonify({
+            'message': f'Batch Nextflow workflow submitted successfully',
+            'run_ids': run_ids,
+            'count': len(run_ids)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Error submitting batch workflow: {str(e)}'}), 500
+
+@app.route('/api/batch_cwl', methods=['POST'])
+def api_batch_cwl():
+    """API version of batch_cwl that returns JSON"""
+    try:
+        batch_mode = request.form.get('batch_mode')
+        cwl_file = request.files.get('cwl_file')
+        inputs_file = request.files.get('inputs_file')
+        
+        if not cwl_file:
+            return jsonify({'error': 'CWL workflow file is required'}), 400
+        
+        run_ids = []
+        
+        # Save uploaded files
+        cwl_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{cwl_file.filename}')
+        cwl_file.save(cwl_path)
+        
+        inputs_path = None
+        if inputs_file and inputs_file.filename:
+            inputs_path = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{uuid.uuid4()}_{inputs_file.filename}')
+            inputs_file.save(inputs_path)
+        
+        env = os.environ.copy()
+        
+        if batch_mode == 'all':
+            for inst in TES_INSTANCES:
+                run_id = str(uuid.uuid4())
+                log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+                
+                # Write demo log for immediate feedback
+                with open(log_file, 'w') as f:
+                    f.write(f"Demo: Batch CWL workflow {run_id} started on {inst['name']}\n")
+                    f.write(f"TES Instance: {inst['url']}\n")
+                    f.write(f"CWL workflow: {cwl_file.filename}\n")
+                    if inputs_path:
+                        f.write(f"Inputs file: {inputs_file.filename}\n")
+                    f.write(f"Status: SUBMITTED\n")
+                    f.write("This is a demo run - actual execution would happen here.\n")
+                
+                batch_runs.append({
+                    'mode': 'all',
+                    'tes_name': inst['name'],
+                    'status': 'SUBMITTED',
+                    'run_id': run_id,
+                    'log_file': log_file,
+                    'workflow_type': 'cwl',
+                    'submitted_at': datetime.now().isoformat()
+                })
+                save_batch_runs(batch_runs)
+                run_ids.append(run_id)
+                
+        elif batch_mode == 'gateway':
+            run_id = str(uuid.uuid4())
+            log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'batch_{run_id}.log')
+            
+            # Write demo log for immediate feedback
+            with open(log_file, 'w') as f:
+                f.write(f"Demo: Federated CWL workflow {run_id} started via TES Gateway\n")
+                f.write(f"TES Gateway: {TES_GATEWAY}\n")
+                f.write(f"CWL workflow: {cwl_file.filename}\n")
+                if inputs_path:
+                    f.write(f"Inputs file: {inputs_file.filename}\n")
+                f.write(f"Status: SUBMITTED\n")
+                f.write("This is a demo run - actual execution would happen here.\n")
+            
+            batch_runs.append({
+                'mode': 'gateway',
+                'tes_name': 'TES Gateway',
+                'status': 'SUBMITTED',
+                'run_id': run_id,
+                'log_file': log_file,
+                'workflow_type': 'cwl',
+                'submitted_at': datetime.now().isoformat()
+            })
+            save_batch_runs(batch_runs)
+            run_ids.append(run_id)
+        else:
+            return jsonify({'error': 'Invalid batch mode'}), 400
+            
+        return jsonify({
+            'message': f'Batch CWL workflow submitted successfully',
+            'run_ids': run_ids,
+            'count': len(run_ids)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Error submitting batch workflow: {str(e)}'}), 500
 
 @app.route('/debug_env')
 def debug_env():
@@ -2732,5 +4636,153 @@ def api_latest_workflow_status():
         latestPath = [last['tes_name']]
     return {'currentStep': currentStep, 'latestPath': latestPath}
 
+@app.route('/task_log/<task_id>')
+def task_log(task_id):
+    log_file = os.path.join(app.config['UPLOAD_FOLDER'], f'task_{task_id}.log')
+    if not os.path.exists(log_file):
+        return 'Log file not found', 404
+    with open(log_file) as f:
+        content = f.read()
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Task Log</title>
+      <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+      <style>
+        body { background: #181f2a; color: #e5e7eb; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; }
+        .main-content { max-width: 900px; margin: 2rem auto; padding: 2rem; }
+        .card { background: #232b3b; border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #283046; box-shadow: 0 2px 8px rgba(0,0,0,0.10); }
+        .card-header { display: flex; align-items: center; margin-bottom: 1rem; }
+        .card-title { font-size: 1.25rem; font-weight: 600; color: #fff; }
+        .btn { padding: 0.5rem 1.25rem; border: none; border-radius: 0.5rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.10); background: #374151; color: #fff; }
+        .btn:hover { background: #2563eb; color: #fff; }
+        .log-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .log-search { background: #232b3b; color: #e5e7eb; border: 1px solid #374151; border-radius: 0.4rem; padding: 0.5rem 1rem; font-size: 1em; }
+        .log-container { background: #101624; border-radius: 0.5rem; padding: 1.2rem 1rem; font-size: 1.02em; color: #e5e7eb; overflow-x: auto; max-height: 600px; line-height: 1.6; font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace; position: relative; }
+        .log-highlight { background: #2563eb; color: #fff; border-radius: 0.2em; padding: 0 0.2em; }
+        .copy-btn { background: #232b3b; color: #fff; border: 1px solid #374151; border-radius: 0.4rem; padding: 0.4rem 1rem; font-size: 1em; cursor: pointer; margin-left: 1rem; }
+        .copy-btn:hover { background: #2563eb; }
+      </style>
+    </head>
+    <body>
+    <div class="main-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title"><i class="fas fa-file-alt"></i> Task Log</h2>
+        </div>
+        <div class="log-toolbar">
+          <input type="text" class="log-search" id="logSearch" placeholder="Search log..." oninput="filterLog()">
+          <button class="copy-btn" onclick="copyLog()"><i class="fas fa-copy"></i> Copy All</button>
+        </div>
+        <div class="log-container" id="logContainer"><pre id="logPre">{{ content }}</pre></div>
+        <a href="/" class="btn" style="margin-top: 1.5rem; background: #283046; color: #fff;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
+    </div>
+    <script>
+      function filterLog() {
+        var input = document.getElementById('logSearch').value.toLowerCase();
+        var pre = document.getElementById('logPre');
+        var lines = pre.textContent.split('\n');
+        if (!input) {
+          pre.innerHTML = lines.map(l => escapeHtml(l)).join('\n');
+          return;
+        }
+        pre.innerHTML = lines.map(function(line) {
+          var idx = line.toLowerCase().indexOf(input);
+          if (idx !== -1) {
+            var before = escapeHtml(line.substring(0, idx));
+            var match = escapeHtml(line.substring(idx, idx + input.length));
+            var after = escapeHtml(line.substring(idx + input.length));
+            return before + '<span class="log-highlight">' + match + '</span>' + after;
+          } else {
+            return escapeHtml(line);
+          }
+        }).join('\n');
+      }
+      function escapeHtml(text) {
+        var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+      }
+      function copyLog() {
+        var pre = document.getElementById('logPre');
+        var text = pre.textContent;
+        navigator.clipboard.writeText(text).then(function() {
+          alert('Log copied to clipboard!');
+        });
+      }
+    </script>
+    </body>
+    </html>
+    ''', content=content)
+
+@app.route('/api/topology_logs')
+def api_topology_logs():
+    # Return the latest workflow/task logs (max 5)
+    logs = []
+    # Add latest workflow logs
+    for wf in reversed(workflow_runs[-3:]):
+        if os.path.exists(wf['log_file']):
+            with open(wf['log_file']) as f:
+                logs.append({'label': f"Workflow: {wf['type']} ({wf['tes_name']})", 'content': f.read()})
+    # Add latest task logs
+    for t in reversed(submitted_tasks[-3:]):
+        log_file = os.path.join(app.config['UPLOAD_FOLDER'], f"task_{t['task_id']}.log")
+        if os.path.exists(log_file):
+            with open(log_file) as f:
+                logs.append({'label': f"Task: {t['tes_name']} ({t['task_id']})", 'content': f.read()})
+    return {'logs': logs[:5]}
+
+# API endpoint for React frontend - Test connection
+@app.route('/api/test_connection')
+def test_connection():
+    """Simple endpoint to test frontend-backend connection"""
+    return jsonify({
+        'status': 'success',
+        'message': 'Backend connection successful!',
+        'timestamp': str(uuid.uuid4())[:8]  # Short random ID for testing
+    })
+
+# API endpoint for React frontend - Dashboard data
+@app.route('/api/dashboard_data')
+def get_dashboard_data():
+    """API endpoint to get all dashboard data for React frontend"""
+    global batch_runs
+    batch_runs = load_batch_runs()  # Reload from file
+    
+    # Get latest_path similar to index route
+    latest_path = []
+    if batch_runs:
+        latest_mode = batch_runs[-1]['mode']
+        latest_type = batch_runs[-1].get('workflow_type', 'snakemake')
+        filtered = [br for br in batch_runs if br['mode'] == latest_mode and br.get('workflow_type', 'snakemake') == latest_type]
+        latest_path = [br['tes_name'] for br in filtered]
+    
+    return jsonify({
+        'tes_instances': TES_INSTANCES,
+        'tes_gateway': TES_GATEWAY,
+        'tasks': submitted_tasks,
+        'workflow_runs': workflow_runs,
+        'batch_runs': batch_runs,
+        'tes_locations': tes_locations,
+        'latest_path': latest_path,
+        'connection_test': 'API working!'
+    })
+
+# API endpoint for TES locations with geographic data
+@app.route('/api/tes_locations')
+def get_tes_locations():
+    """API endpoint to get TES instance locations with geographic coordinates"""
+    return jsonify(tes_locations)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # app.run(host='0.0.0.0', port=5001)
+    app.run(debug=True, port=5001, host='0.0.0.0')
+    
+    
+# docker build -t keshxvdayal/tes-dashboard:latest .
+# docker buildx build --platform linux/amd64,linux/arm64 -t keshxvdayal/tes-dashboard:latest --push .
+
+# docker run -it --rm -p 8080:5000 tes-dashboard  

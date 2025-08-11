@@ -17,8 +17,8 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install 'pip<21.3' 'setuptools<58'
 RUN pip install Cython wheel
-RUN pip install --upgrade pip && pip install -r requirements.txt \
-    && pip install --upgrade snakemake  # Ensure snakemake CLI is installed
+RUN pip uninstall -y pulp && pip install --no-cache-dir --force-reinstall 'pulp==2.6.0'
+RUN pip install --no-cache-dir -r requirements.txt   
 
 # Copy the rest of the app
 COPY . .
