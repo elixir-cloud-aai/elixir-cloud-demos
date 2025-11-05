@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Determine API base URL based on environment
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' // Use relative path - will be proxied to backend
+  ? '/api' // Use relative path in production (nginx/proxy will handle routing)
   : 'http://localhost:8000'; // Development backend
 
 // Create axios instance with default config

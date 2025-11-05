@@ -181,58 +181,52 @@ spec:
               mountPath: /shared
       containers:
         - name: tesdashboardanalytics-frontend
-          image: nginx:alpine
+          image: node:20-alpine
           ports:
-            - containerPort: 80
+            - containerPort: 3000
               protocol: TCP
           workingDir: /shared/app/frontend
           command: ["/bin/sh", "-c"]
           args:
             - |
               # Create writable directories
-              mkdir -p /tmp/.npm /tmp/home /tmp/nginx
+              mkdir -p /tmp/.npm /tmp/home
               export npm_config_cache=/tmp/.npm
               export HOME=/tmp/home
               
-              # Install Node.js and npm
-              apk add --no-cache nodejs npm
-              
               # Clean install to avoid corruption
               rm -rf node_modules package-lock.json
+              echo "📦 Installing npm dependencies..."
               npm install
               
               # Build the application
+              echo "🏗️ Building React application..."
               npm run build
               
-              # Copy built files to nginx directory
-              cp -r build/* /usr/share/nginx/html/
-              
-              # Copy nginx configuration
-              cp nginx.conf /etc/nginx/conf.d/default.conf
-              
-              # Start nginx
-              nginx -g 'daemon off;'
+              # Start the production server with proxy
+              echo "🌐 Starting production server with API proxy..."
+              npm run serve
           volumeMounts:
             - name: shared-data-frontend
               mountPath: /shared
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "300m"
-            limits:
               memory: "1Gi"
-              cpu: "600m"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
           livenessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 300
+            initialDelaySeconds: 600
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 240
+            initialDelaySeconds: 480
             periodSeconds: 5
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
