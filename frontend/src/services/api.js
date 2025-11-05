@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Determine API base URL based on environment
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://tesdashboardanalytics-backend-service:8000' // Kubernetes service name
+  ? '/api' // Use relative path - will be proxied to backend
   : 'http://localhost:8000'; // Development backend
 
 // Create axios instance with default config

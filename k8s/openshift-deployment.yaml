@@ -181,25 +181,37 @@ spec:
               mountPath: /shared
       containers:
         - name: tesdashboardanalytics-frontend
-          image: node:20-alpine
+          image: nginx:alpine
           ports:
-            - containerPort: 3000
+            - containerPort: 80
               protocol: TCP
           workingDir: /shared/app/frontend
           command: ["/bin/sh", "-c"]
           args:
             - |
               # Create writable directories
-              mkdir -p /tmp/.npm /tmp/home
+              mkdir -p /tmp/.npm /tmp/home /tmp/nginx
               export npm_config_cache=/tmp/.npm
               export HOME=/tmp/home
+              
+              # Install Node.js and npm
+              apk add --no-cache nodejs npm
+              
               # Clean install to avoid corruption
               rm -rf node_modules package-lock.json
               npm install
+              
               # Build the application
               npm run build
-              # Serve the built app
-              npx serve -s build -l 3000
+              
+              # Copy built files to nginx directory
+              cp -r build/* /usr/share/nginx/html/
+              
+              # Copy nginx configuration
+              cp nginx.conf /etc/nginx/conf.d/default.conf
+              
+              # Start nginx
+              nginx -g 'daemon off;'
           volumeMounts:
             - name: shared-data-frontend
               mountPath: /shared
@@ -262,7 +274,27 @@ spec:
   type: LoadBalancer
 
 ---
-# OpenShift Route for external access (if you have route permissions)
+# OpenShift Route for backend access
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tesdashboardanalytics-backend-route
+  labels:
+    app: tesdashboardanalytics-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: tesdashboardanalytics
+spec:
+  to:
+    kind: Service
+    name: tesdashboardanalytics-backend-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# OpenShift Route for frontend access
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
