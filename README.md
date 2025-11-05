@@ -1,36 +1,81 @@
-# ELIXIR Cloud Demos
+# TES Dashboard
 
 [![license][badge-license]][badge-url-license]
 [![chat][badge-chat]][badge-url-chat]
 
-Demonstrators of the [**ELIXIR Cloud**][res-elixir-cloud], an
-[ELIXIR][res-elixir] federated compute infrastructure based on
-[GA4GH][res-ga4gh] standards.
+A clean, modern dashboard for monitoring Task Execution Service (TES) instances and workflow execution across multiple cloud providers, built as part of the [**ELIXIR Cloud**][res-elixir-cloud] ecosystem.
 
-## Usage
+## Features
 
-Each demonstrator is self-contained and available in its own folder, together
-with demo-specific installation and usage instructions. There are, however,
-some [global requirements](#requirements) for all demos.
+- Real-time monitoring of TES instances
+- Workflow submission and tracking
+- Interactive dashboard with analytics
+- Modern React frontend with Flask backend
+- Cross-platform compatibility
 
-Follow the shortcuts in the following table to the individual demos.
+## Quick Start
 
-| Name | First Demo | Description |
-| --- | --- | --- |
-| [2023-ecp-f2f](demos/2023-ecp-f2f/README.md) | ELIXIR Compute Face-to-Face, Helsinki, Feb 7-8, 2023 | Task execution via the [Task Execution Service (TES) API](https://github.com/ga4gh/task-execution-schemas/) on Kubernetes and HPC; TES-based task distribution with random and distance-based task distribution logic; execution of a CWL workflow via the `cwl-tes` TES backend |
+### Prerequisites
 
-## Requirements
+- Python 3.7+
+- Node.js 14+
+- npm or yarn
 
-All demos require the following software to be installed:
+### Run the Dashboard
 
-- [Conda][req-conda]
-- [Git][req-git]
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd elixir-cloud-demos
+   ```
 
-We further recommend installing the following software:
+2. Run the dashboard (starts both frontend and backend):
+   ```bash
+   ./run.sh
+   ```
 
-- [Mamba][req-mamba]
+   This will:
+   - Install backend dependencies in a virtual environment
+   - Install frontend dependencies
+   - Start the backend server on http://localhost:5000
+   - Start the frontend server on http://localhost:3000
 
-> We recommend installing the latest versions of each of these packages.
+3. Open your browser and navigate to http://localhost:3000
+
+### Manual Setup
+
+If you prefer to run the services manually:
+
+#### Backend
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+#### Frontend
+```bash
+cd frontend
+npm install
+npm start
+```
+
+## Project Structure
+
+```
+├── backend/           # Flask backend API
+│   ├── app.py        # Main application
+│   ├── requirements.txt
+│   └── ...
+├── frontend/         # React frontend
+│   ├── package.json
+│   ├── src/
+│   └── public/
+├── run.sh           # Quick start script
+└── README.md
+```
 
 ## Contributing
 

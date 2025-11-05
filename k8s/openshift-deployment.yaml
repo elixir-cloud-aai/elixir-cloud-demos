@@ -1,0 +1,282 @@
+# OpenShift-compatible deployment for TES Dashboard Analytics
+# Based on your successful deployment pattern from August 2025
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tesdashboardanalytics-backend
+  annotations:
+    alpha.image.policy.openshift.io/resolve-names: '*'
+    app.openshift.io/route-disabled: 'false'
+    openshift.io/generated-by: OpenShiftWebConsole
+  labels:
+    app: tesdashboardanalytics-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: tesdashboardanalytics
+    app.kubernetes.io/name: tesdashboardanalytics-backend
+    app.kubernetes.io/part-of: tes-dashboard-analytics-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tesdashboardanalytics-backend
+  template:
+    metadata:
+      labels:
+        app: tesdashboardanalytics-backend
+        deployment: tesdashboardanalytics-backend
+      annotations:
+        openshift.io/generated-by: OpenShiftWebConsole
+    spec:
+      initContainers:
+        - name: git-clone
+          image: alpine/git:latest
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              echo "🔄 Cloning dashboard-deploy branch..."
+              git clone -b dashboard-deploy --depth 1 https://github.com/elixir-cloud-aai/elixir-cloud-demos.git /shared/app
+              echo "✅ Git clone complete"
+              # Set proper permissions for OpenShift
+              chmod -R 777 /shared/app
+              chown -R 1001:0 /shared/app || true
+              echo "✅ Permissions set"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /shared
+      containers:
+        - name: tesdashboardanalytics-backend
+          image: python:3.9-slim
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          workingDir: /shared/app/backend
+          command: ["/bin/bash"]
+          args:
+            - -c
+            - |
+              # Create a writable home directory
+              mkdir -p /tmp/home
+              export HOME=/tmp/home
+              # Install dependencies to user directory
+              pip install --user -r requirements.txt
+              # Create uploads directory in writable location
+              mkdir -p /tmp/uploads
+              # Set environment variables
+              export PYTHONPATH=/shared/app/backend:$HOME/.local/lib/python3.9/site-packages
+              export UPLOAD_FOLDER=/tmp/uploads
+              # Run the application
+              python app.py
+          volumeMounts:
+            - name: shared-data
+              mountPath: /shared
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: FLASK_ENV
+              value: "production"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 90
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 5
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      volumes:
+        - name: shared-data
+          emptyDir: {}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tesdashboardanalytics-backend-service
+  labels:
+    app: tesdashboardanalytics-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/instance: tesdashboardanalytics
+    app.kubernetes.io/name: tesdashboardanalytics-backend
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: tesdashboardanalytics-backend
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tesdashboardanalytics-frontend
+  annotations:
+    alpha.image.policy.openshift.io/resolve-names: '*'
+    app.openshift.io/route-disabled: 'false'
+    openshift.io/generated-by: OpenShiftWebConsole
+  labels:
+    app: tesdashboardanalytics-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: tesdashboardanalytics
+    app.kubernetes.io/name: tesdashboardanalytics-frontend
+    app.kubernetes.io/part-of: tes-dashboard-analytics-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tesdashboardanalytics-frontend
+  template:
+    metadata:
+      labels:
+        app: tesdashboardanalytics-frontend
+        deployment: tesdashboardanalytics-frontend
+      annotations:
+        openshift.io/generated-by: OpenShiftWebConsole
+    spec:
+      initContainers:
+        - name: git-clone-frontend
+          image: alpine/git:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "🔄 Cloning dashboard-deploy branch..."
+              git clone -b dashboard-deploy --depth 1 https://github.com/elixir-cloud-aai/elixir-cloud-demos.git /shared/app
+              echo "✅ Git clone complete"
+              # Set proper permissions for OpenShift
+              chmod -R 777 /shared/app
+              chown -R 1001:0 /shared/app || true
+              echo "✅ Permissions set"
+          volumeMounts:
+            - name: shared-data-frontend
+              mountPath: /shared
+      containers:
+        - name: tesdashboardanalytics-frontend
+          image: node:20-alpine
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          workingDir: /shared/app/frontend
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Create writable directories
+              mkdir -p /tmp/.npm /tmp/home
+              export npm_config_cache=/tmp/.npm
+              export HOME=/tmp/home
+              # Clean install to avoid corruption
+              rm -rf node_modules package-lock.json
+              npm install
+              # Build the application
+              npm run build
+              # Serve the built app
+              npx serve -s build -l 3000
+          volumeMounts:
+            - name: shared-data-frontend
+              mountPath: /shared
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "600m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 300
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 240
+            periodSeconds: 5
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      volumes:
+        - name: shared-data-frontend
+          emptyDir: {}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tesdashboardanalytics-frontend-service
+  labels:
+    app: tesdashboardanalytics-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: tesdashboardanalytics
+    app.kubernetes.io/name: tesdashboardanalytics-frontend
+spec:
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: tesdashboardanalytics-frontend
+  type: LoadBalancer
+
+---
+# OpenShift Route for external access (if you have route permissions)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tesdashboardanalytics-route
+  labels:
+    app: tesdashboardanalytics-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: tesdashboardanalytics
+spec:
+  to:
+    kind: Service
+    name: tesdashboardanalytics-frontend-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

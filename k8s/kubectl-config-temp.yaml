@@ -1,0 +1,20 @@
+apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://192.168.140.150:6443
+  name: public-poesis-cluster
+contexts:
+- context:
+    cluster: public-poesis-cluster
+    namespace: default
+    user: admin@public-poesis-cluster
+  name: admin@public-poesis-cluster
+current-context: admin@public-poesis-cluster
+kind: Config
+preferences: {}
+users:
+- name: admin@public-poesis-cluster
+  user:
+    token: ""
+    # Using token-based auth instead of certificates
