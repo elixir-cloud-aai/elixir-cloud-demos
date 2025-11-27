@@ -190,7 +190,7 @@ const Dashboard = () => {
     loading: dashboardLoading, 
     error: dashboardError,
     refetch: refetchDashboard 
-  } = usePolling(fetchDashboardData, POLLING_INTERVALS.NORMAL);
+  } = usePolling(() => fetchDashboardData(), POLLING_INTERVALS.NORMAL);
 
   // Poll task status every 5 seconds
   const { 
@@ -198,7 +198,7 @@ const Dashboard = () => {
     loading: tasksLoading, 
     error: tasksError,
     refetch: refetchTasks 
-  } = usePolling(taskService.listTasks, POLLING_INTERVALS.NORMAL);
+  } = usePolling(() => taskService.listTasks(), POLLING_INTERVALS.NORMAL);
 
   const handleTestConnection = async () => {
     setTestLoading(true);
@@ -260,6 +260,8 @@ const Dashboard = () => {
             )}
           </div>
         )}
+        
+
       </ContentCard>
 
       {/* Stats Grid */}

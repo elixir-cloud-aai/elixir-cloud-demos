@@ -1,0 +1,44 @@
+# Snakemake Hello World Pipeline
+# A simple demonstration of Snakemake workflow functionality
+
+# Configuration
+configfile: "config.yaml"
+
+# Define the final output files
+rule all:
+    input:
+        "results/hello_world.txt",
+        "results/summary.txt"
+
+# Rule to create greeting
+rule create_greeting:
+    output:
+        "results/hello_world.txt"
+    params:
+        message=config.get("message", "Hello, World from Snakemake!")
+    shell:
+        """
+        mkdir -p results
+        echo "{params.message}" > {output}
+        echo "Generated on: $(date)" >> {output}
+        echo "Pipeline: Snakemake Hello World" >> {output}
+        """
+
+# Rule to create summary
+rule create_summary:
+    input:
+        "results/hello_world.txt"
+    output:
+        "results/summary.txt"
+    shell:
+        """
+        echo "Snakemake Pipeline Summary" > {output}
+        echo "=========================" >> {output}
+        echo "Input file: {input}" >> {output}
+        echo "Output file: {output}" >> {output}
+        echo "File size: $(wc -c < {input}) bytes" >> {output}
+        echo "Line count: $(wc -l < {input}) lines" >> {output}
+        echo "" >> {output}
+        echo "Content preview:" >> {output}
+        cat {input} >> {output}
+        """

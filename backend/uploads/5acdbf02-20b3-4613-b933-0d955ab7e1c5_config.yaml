@@ -1,0 +1,14 @@
+# Snakemake Configuration File
+message: "Hello, World from Snakemake!"
+threads: 4
+memory: "8G"
+
+# Sample configuration
+samples:
+  - sample1
+  - sample2
+  - sample3
+
+# Analysis parameters
+quality_threshold: 0.05
+analysis_mode: "standard"

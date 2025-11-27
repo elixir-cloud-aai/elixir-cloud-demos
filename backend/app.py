@@ -7,6 +7,7 @@ import requests
 import subprocess
 import uuid
 import json
+import time
 from datetime import datetime
 
 # Load environment variables
@@ -725,6 +726,519 @@ def get_topology_logs():
         })
     
     return jsonify({'logs': logs})
+
+@app.route('/api/service_status', methods=['GET'])
+@app.route('/api/service-status', methods=['GET'])
+def service_status():
+    """Get status of all TES services and nodes"""
+    try:
+        service_statuses = []
+        
+        # Read from the rich TES instance locations file instead of .tes_instances
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        instances = []
+        if tes_locations_file.exists():
+            with open(tes_locations_file, 'r') as f:
+                instances = json.load(f)
+        else:
+            # Fallback to TES_INSTANCES if JSON file doesn't exist
+            instances = TES_INSTANCES
+            
+        for instance in instances:
+            # Handle both JSON format and simple format
+            name = instance.get('name', instance.get('id', 'Unknown'))
+            url = instance.get('url', '')
+            country = instance.get('country', 'Unknown')
+            
+            status_info = {
+                'name': name,
+                'url': url,
+                'type': 'TES',
+                'location': country,
+                'status': 'offline',
+                'response_time': None,
+                'health': 'unhealthy',
+                'details': {},
+                'last_checked': datetime.now().isoformat()
+            }
+            
+            # Try different TES service-info endpoint patterns
+            endpoints_to_try = [
+                f"{url}/ga4gh/tes/v1/service-info",  # Standard GA4GH TES
+                f"{url}/service-info",                # Simple service-info
+                f"{url}/api/service-info",            # API prefixed
+                f"{url}",                            # Basic connectivity test
+            ]
+            
+            success = False
+            for endpoint in endpoints_to_try:
+                try:
+                    start_time = time.time()
+                    response = requests.get(endpoint, timeout=8)
+                    response_time = time.time() - start_time
+                    
+                    if response.status_code == 200:
+                        status_info['status'] = 'online'
+                        status_info['health'] = 'healthy'
+                        status_info['response_time'] = response_time
+                        
+                        # Try to get service info details
+                        try:
+                            service_data = response.json()
+                            status_info['details'] = {
+                                'version': service_data.get('version', 'Unknown'),
+                                'name': service_data.get('name', name),
+                                'description': service_data.get('description', 'TES Service'),
+                                'organization': service_data.get('organization', {}).get('name', 'Unknown'),
+                                'endpoint_used': endpoint
+                            }
+                        except:
+                            # If it's not JSON or doesn't have expected fields, it's still a successful connection
+                            status_info['details'] = {
+                                'message': 'Service responded successfully',
+                                'endpoint_used': endpoint
+                            }
+                        success = True
+                        break
+                        
+                    elif response.status_code == 403:
+                        # Service exists but requires authentication
+                        status_info['status'] = 'online'
+                        status_info['health'] = 'healthy'  # Service is working, just needs auth
+                        status_info['response_time'] = response_time
+                        status_info['details'] = {
+                            'message': 'Service requires authentication (403 - Service Available)',
+                            'endpoint_used': endpoint
+                        }
+                        success = True
+                        break
+                        
+                except requests.exceptions.Timeout:
+                    continue  # Try next endpoint
+                    
+                except requests.exceptions.ConnectionError:
+                    continue  # Try next endpoint
+                    
+                except Exception:
+                    continue  # Try next endpoint
+            
+            # If none of the endpoints worked, mark as offline
+            if not success:
+                status_info['status'] = 'offline'
+                status_info['health'] = 'unhealthy'
+                status_info['details'] = {'error': 'All endpoints unreachable or returned errors'}
+            
+            service_statuses.append(status_info)
+        
+        # Calculate overall system health
+        online_services = sum(1 for s in service_statuses if s['status'] == 'online')
+        total_services = len(service_statuses)
+        health_percentage = (online_services / total_services * 100) if total_services > 0 else 0
+        
+        overall_status = 'healthy' if health_percentage >= 80 else 'degraded' if health_percentage >= 50 else 'unhealthy'
+        
+        return jsonify({
+            'services': service_statuses,
+            'summary': {
+                'total_services': total_services,
+                'online_services': online_services,
+                'offline_services': total_services - online_services,
+                'health_percentage': health_percentage,
+                'overall_status': overall_status,
+                'last_updated': datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/service-health/<service_id>', methods=['GET'])
+def get_service_health(service_id):
+    """Get health status for a specific service by ID"""
+    try:
+        # Load TES instances
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        instances = []
+        if tes_locations_file.exists():
+            with open(tes_locations_file, 'r') as f:
+                instances = json.load(f)
+        
+        # Find the service by ID
+        service = None
+        for instance in instances:
+            if instance.get('id') == service_id:
+                service = instance
+                break
+        
+        if not service:
+            return jsonify({'error': f'Service with ID {service_id} not found'}), 404
+        
+        # Check service health with multiple endpoint patterns
+        url = service.get('url', '')
+        endpoints_to_try = [
+            f"{url}/ga4gh/tes/v1/service-info",  # Standard GA4GH TES
+            f"{url}/service-info",                # Simple service-info
+            f"{url}/api/service-info",            # API prefixed
+        ]
+        
+        for endpoint in endpoints_to_try:
+            try:
+                start_time = time.time()
+                response = requests.get(endpoint, timeout=5, headers={
+                    'Accept': 'application/json',
+                    'User-Agent': 'TES-Dashboard/1.0'
+                })
+                response_time = round((time.time() - start_time) * 1000)  # Convert to milliseconds
+                
+                if response.status_code == 200:
+                    service_info = None
+                    try:
+                        service_info = response.json()
+                    except:
+                        pass  # Not JSON, but still successful
+                    
+                    return jsonify({
+                        'status': 'online',
+                        'responseTime': response_time,
+                        'endpoint': endpoint,
+                        'serviceInfo': service_info,
+                        'lastChecked': datetime.now().isoformat()
+                    })
+                    
+                elif response.status_code == 403:
+                    # Service exists but requires authentication
+                    return jsonify({
+                        'status': 'online',
+                        'responseTime': response_time,
+                        'endpoint': endpoint,
+                        'note': 'Service requires authentication',
+                        'lastChecked': datetime.now().isoformat()
+                    })
+                    
+            except requests.exceptions.RequestException as e:
+                continue  # Try next endpoint
+        
+        # All endpoints failed
+        return jsonify({
+            'status': 'offline',
+            'error': 'All service endpoints failed to respond',
+            'lastChecked': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nodes', methods=['GET'])
+def get_nodes():
+    """Get all nodes in the federated TES network"""
+    try:
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        if tes_locations_file.exists():
+            with open(tes_locations_file, 'r') as f:
+                nodes = json.load(f)
+                return jsonify({'nodes': nodes})
+        else:
+            return jsonify({'nodes': []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nodes', methods=['POST'])
+def add_node():
+    """Add a new node to the federated TES network"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['id', 'name', 'url', 'country']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Load existing nodes
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        nodes = []
+        if tes_locations_file.exists():
+            with open(tes_locations_file, 'r') as f:
+                nodes = json.load(f)
+        
+        # Check if node ID already exists
+        if any(node['id'] == data['id'] for node in nodes):
+            return jsonify({'error': f'Node with ID {data["id"]} already exists'}), 400
+        
+        # Create new node with default values
+        new_node = {
+            'id': data['id'],
+            'name': data['name'],
+            'url': data['url'].rstrip('/'),  # Remove trailing slash
+            'country': data['country'],
+            'ip': data.get('ip', '0.0.0.0'),
+            'lat': data.get('lat', 0.0),
+            'lng': data.get('lng', 0.0),
+            'lon': data.get('lng', 0.0),  # Some systems use lon instead of lng
+            'status': 'healthy',  # Default to healthy, will be updated by health checks
+            'tasks': 0,
+            'workflows': 0,
+            'description': data.get('description', f'TES instance at {data["country"]}'),
+            'capacity': {
+                'cpu': data.get('cpu', 100),
+                'memory': data.get('memory', '100GB'),
+                'storage': data.get('storage', '1TB')
+            },
+            'version': data.get('version', 'v1.0.0'),
+            'region': data.get('region', 'Unknown'),
+            'latency': data.get('latency', 100)
+        }
+        
+        # Test connectivity to the new node
+        connectivity_status = 'unknown'
+        try:
+            endpoints_to_try = [
+                f"{new_node['url']}/ga4gh/tes/v1/service-info",
+                f"{new_node['url']}/service-info",
+                f"{new_node['url']}/api/service-info",
+                f"{new_node['url']}"
+            ]
+            
+            for endpoint in endpoints_to_try:
+                try:
+                    response = requests.get(endpoint, timeout=5)
+                    if response.status_code in [200, 403]:  # 403 means service exists but needs auth
+                        connectivity_status = 'reachable'
+                        break
+                except:
+                    continue
+        except:
+            connectivity_status = 'unreachable'
+        
+        # Add connectivity test result
+        new_node['connectivity_test'] = connectivity_status
+        
+        # Add to nodes list
+        nodes.append(new_node)
+        
+        # Save updated nodes
+        with open(tes_locations_file, 'w') as f:
+            json.dump(nodes, f, indent=2)
+        
+        # Also update TES_INSTANCES for backward compatibility
+        TES_INSTANCES.append({
+            'name': new_node['name'],
+            'url': new_node['url']
+        })
+        
+        return jsonify({
+            'message': 'Node added successfully',
+            'node': new_node,
+            'connectivity_test': connectivity_status
+        }), 201
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nodes/<node_id>', methods=['DELETE'])
+def remove_node(node_id):
+    """Remove a node from the federated TES network"""
+    try:
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        if not tes_locations_file.exists():
+            return jsonify({'error': 'No nodes configuration found'}), 404
+        
+        # Load existing nodes
+        with open(tes_locations_file, 'r') as f:
+            nodes = json.load(f)
+        
+        # Find and remove the node
+        original_count = len(nodes)
+        nodes = [node for node in nodes if node['id'] != node_id]
+        
+        if len(nodes) == original_count:
+            return jsonify({'error': f'Node with ID {node_id} not found'}), 404
+        
+        # Save updated nodes
+        with open(tes_locations_file, 'w') as f:
+            json.dump(nodes, f, indent=2)
+        
+        # Also update TES_INSTANCES for backward compatibility
+        global TES_INSTANCES
+        TES_INSTANCES = [inst for inst in TES_INSTANCES if inst.get('url') != next(
+            (node['url'] for node in nodes if node['id'] == node_id), None
+        )]
+        
+        return jsonify({
+            'message': f'Node {node_id} removed successfully',
+            'remaining_nodes': len(nodes)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nodes/<node_id>', methods=['PUT'])
+def update_node(node_id):
+    """Update an existing node in the federated TES network"""
+    try:
+        data = request.get_json()
+        
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        if not tes_locations_file.exists():
+            return jsonify({'error': 'No nodes configuration found'}), 404
+        
+        # Load existing nodes
+        with open(tes_locations_file, 'r') as f:
+            nodes = json.load(f)
+        
+        # Find the node to update
+        node_index = next((i for i, node in enumerate(nodes) if node['id'] == node_id), None)
+        if node_index is None:
+            return jsonify({'error': f'Node with ID {node_id} not found'}), 404
+        
+        # Update the node with provided data
+        current_node = nodes[node_index]
+        updatable_fields = ['name', 'url', 'country', 'description', 'region', 'ip', 'lat', 'lng', 'lon']
+        
+        for field in updatable_fields:
+            if field in data:
+                current_node[field] = data[field]
+        
+        # Update capacity if provided
+        if 'capacity' in data:
+            current_node['capacity'].update(data['capacity'])
+        
+        # Update version if provided
+        if 'version' in data:
+            current_node['version'] = data['version']
+        
+        # Remove trailing slash from URL
+        if 'url' in data:
+            current_node['url'] = current_node['url'].rstrip('/')
+        
+        # Test connectivity if URL was updated
+        if 'url' in data:
+            connectivity_status = 'unknown'
+            try:
+                endpoints_to_try = [
+                    f"{current_node['url']}/ga4gh/tes/v1/service-info",
+                    f"{current_node['url']}/service-info",
+                    f"{current_node['url']}/api/service-info",
+                    f"{current_node['url']}"
+                ]
+                
+                for endpoint in endpoints_to_try:
+                    try:
+                        response = requests.get(endpoint, timeout=5)
+                        if response.status_code in [200, 403]:
+                            connectivity_status = 'reachable'
+                            break
+                    except:
+                        continue
+            except:
+                connectivity_status = 'unreachable'
+            
+            current_node['connectivity_test'] = connectivity_status
+        
+        # Save updated nodes
+        with open(tes_locations_file, 'w') as f:
+            json.dump(nodes, f, indent=2)
+        
+        return jsonify({
+            'message': f'Node {node_id} updated successfully',
+            'node': current_node
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nodes/<node_id>/test', methods=['POST'])
+def test_node_connectivity(node_id):
+    """Test connectivity to a specific node"""
+    try:
+        tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
+        if not tes_locations_file.exists():
+            return jsonify({'error': 'No nodes configuration found'}), 404
+        
+        # Load existing nodes
+        with open(tes_locations_file, 'r') as f:
+            nodes = json.load(f)
+        
+        # Find the node
+        node = next((n for n in nodes if n['id'] == node_id), None)
+        if not node:
+            return jsonify({'error': f'Node with ID {node_id} not found'}), 404
+        
+        # Test connectivity
+        test_results = []
+        endpoints_to_try = [
+            f"{node['url']}/ga4gh/tes/v1/service-info",
+            f"{node['url']}/service-info", 
+            f"{node['url']}/api/service-info",
+            f"{node['url']}"
+        ]
+        
+        overall_status = 'unreachable'
+        fastest_response = None
+        
+        for endpoint in endpoints_to_try:
+            try:
+                start_time = time.time()
+                response = requests.get(endpoint, timeout=10)
+                response_time = time.time() - start_time
+                
+                result = {
+                    'endpoint': endpoint,
+                    'status_code': response.status_code,
+                    'response_time': response_time,
+                    'reachable': response.status_code in [200, 403]
+                }
+                
+                if result['reachable']:
+                    overall_status = 'reachable'
+                    if fastest_response is None or response_time < fastest_response:
+                        fastest_response = response_time
+                
+                # Try to get service info if successful
+                if response.status_code == 200:
+                    try:
+                        service_data = response.json()
+                        result['service_info'] = {
+                            'name': service_data.get('name', 'Unknown'),
+                            'version': service_data.get('version', 'Unknown'),
+                            'description': service_data.get('description', 'No description')
+                        }
+                    except:
+                        result['service_info'] = {'error': 'Could not parse service info'}
+                
+                test_results.append(result)
+                
+            except requests.exceptions.Timeout:
+                test_results.append({
+                    'endpoint': endpoint,
+                    'error': 'Timeout',
+                    'reachable': False
+                })
+            except requests.exceptions.ConnectionError:
+                test_results.append({
+                    'endpoint': endpoint,
+                    'error': 'Connection refused',
+                    'reachable': False
+                })
+            except Exception as e:
+                test_results.append({
+                    'endpoint': endpoint,
+                    'error': str(e),
+                    'reachable': False
+                })
+        
+        return jsonify({
+            'node_id': node_id,
+            'node_name': node['name'],
+            'node_url': node['url'],
+            'overall_status': overall_status,
+            'fastest_response_time': fastest_response,
+            'test_results': test_results,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/test_connection', methods=['GET'])
 def test_connection():

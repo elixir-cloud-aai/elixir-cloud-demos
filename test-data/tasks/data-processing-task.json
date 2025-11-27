@@ -1,0 +1,79 @@
+{
+  "name": "data-processing-task",
+  "description": "Process and analyze data files",
+  "inputs": [
+    {
+      "name": "input_data",
+      "description": "Input data file for processing",
+      "type": "FILE",
+      "url": "s3://bucket/data/input_data.csv",
+      "path": "/data/input.csv"
+    },
+    {
+      "name": "config_file",
+      "description": "Configuration parameters",
+      "type": "FILE",
+      "url": "file:///config/params.json",
+      "path": "/config/params.json"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "processed_data",
+      "description": "Processed data output",
+      "type": "FILE",
+      "url": "s3://bucket/results/processed_data.csv",
+      "path": "/results/processed.csv"
+    },
+    {
+      "name": "analysis_report",
+      "description": "Analysis report and statistics",
+      "type": "FILE",
+      "url": "s3://bucket/results/report.html",
+      "path": "/results/report.html"
+    },
+    {
+      "name": "logs",
+      "description": "Processing logs",
+      "type": "DIRECTORY",
+      "url": "s3://bucket/logs/",
+      "path": "/logs/"
+    }
+  ],
+  "executors": [
+    {
+      "image": "python:3.9-slim",
+      "command": [
+        "python3",
+        "/app/process_data.py",
+        "--input", "/data/input.csv",
+        "--config", "/config/params.json",
+        "--output", "/results/processed.csv",
+        "--report", "/results/report.html",
+        "--log-dir", "/logs"
+      ],
+      "workdir": "/app",
+      "env": {
+        "PYTHONPATH": "/app",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  ],
+  "resources": {
+    "cpu_cores": 4,
+    "ram_gb": 8,
+    "disk_gb": 50,
+    "preemptible": true
+  },
+  "tags": {
+    "environment": "production",
+    "type": "data-processing",
+    "version": "2.1",
+    "department": "bioinformatics",
+    "priority": "high"
+  },
+  "volumes": [
+    "/tmp:/tmp",
+    "/var/log:/host_logs:ro"
+  ]
+}

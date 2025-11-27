@@ -1,0 +1,106 @@
+{
+  "name": "gpu-ml-training",
+  "description": "Machine learning model training with GPU acceleration",
+  "inputs": [
+    {
+      "name": "training_data",
+      "description": "Training dataset",
+      "type": "DIRECTORY",
+      "url": "s3://ml-datasets/training/",
+      "path": "/data/train/"
+    },
+    {
+      "name": "validation_data",
+      "description": "Validation dataset",
+      "type": "DIRECTORY",
+      "url": "s3://ml-datasets/validation/",
+      "path": "/data/validation/"
+    },
+    {
+      "name": "model_config",
+      "description": "Model configuration file",
+      "type": "FILE",
+      "url": "file:///config/model.yaml",
+      "path": "/config/model.yaml"
+    },
+    {
+      "name": "pretrained_weights",
+      "description": "Pre-trained model weights",
+      "type": "FILE",
+      "url": "s3://ml-models/pretrained/base_model.pth",
+      "path": "/models/pretrained.pth"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "trained_model",
+      "description": "Final trained model",
+      "type": "FILE",
+      "url": "s3://ml-results/trained_model.pth",
+      "path": "/results/trained_model.pth"
+    },
+    {
+      "name": "training_logs",
+      "description": "Training logs and metrics",
+      "type": "DIRECTORY",
+      "url": "s3://ml-results/logs/",
+      "path": "/results/logs/"
+    },
+    {
+      "name": "model_metrics",
+      "description": "Model performance metrics",
+      "type": "FILE",
+      "url": "s3://ml-results/metrics.json",
+      "path": "/results/metrics.json"
+    },
+    {
+      "name": "tensorboard_logs",
+      "description": "TensorBoard visualization files",
+      "type": "DIRECTORY",
+      "url": "s3://ml-results/tensorboard/",
+      "path": "/results/tensorboard/"
+    }
+  ],
+  "executors": [
+    {
+      "image": "pytorch/pytorch:1.12.1-cuda11.3-cudnn8-runtime",
+      "command": [
+        "python3",
+        "/app/train.py",
+        "--config", "/config/model.yaml",
+        "--data-dir", "/data",
+        "--output-dir", "/results",
+        "--pretrained", "/models/pretrained.pth",
+        "--gpu"
+      ],
+      "workdir": "/app",
+      "env": {
+        "CUDA_VISIBLE_DEVICES": "0,1",
+        "NCCL_DEBUG": "INFO",
+        "PYTHONPATH": "/app"
+      }
+    }
+  ],
+  "resources": {
+    "cpu_cores": 8,
+    "ram_gb": 32,
+    "disk_gb": 200,
+    "preemptible": true,
+    "gpu_count": 2,
+    "gpu_type": "nvidia-tesla-v100"
+  },
+  "tags": {
+    "environment": "production",
+    "type": "machine-learning",
+    "framework": "pytorch",
+    "version": "1.0",
+    "gpu_required": "true",
+    "cost_center": "ai_research",
+    "priority": "medium",
+    "estimated_runtime": "8-12 hours"
+  },
+  "volumes": [
+    "/tmp:/tmp",
+    "/dev/shm:/dev/shm"
+  ]
+}

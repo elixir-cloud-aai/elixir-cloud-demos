@@ -1,0 +1,106 @@
+{
+  "name": "bioinformatics-analysis",
+  "description": "Comprehensive bioinformatics analysis pipeline",
+  "inputs": [
+    {
+      "name": "sequence_data",
+      "description": "FASTQ sequence files",
+      "type": "DIRECTORY",
+      "url": "s3://genomics-data/samples/",
+      "path": "/data/sequences/"
+    },
+    {
+      "name": "reference_genome",
+      "description": "Reference genome FASTA file",
+      "type": "FILE",
+      "url": "s3://reference-genomes/hg38.fa",
+      "path": "/reference/genome.fa"
+    },
+    {
+      "name": "annotation_file",
+      "description": "Gene annotation GTF file",
+      "type": "FILE",
+      "url": "s3://reference-genomes/hg38_genes.gtf",
+      "path": "/reference/genes.gtf"
+    },
+    {
+      "name": "analysis_config",
+      "description": "Analysis configuration and parameters",
+      "type": "FILE",
+      "url": "file:///config/analysis.yaml",
+      "path": "/config/analysis.yaml"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "aligned_sequences",
+      "description": "Aligned BAM files",
+      "type": "DIRECTORY",
+      "url": "s3://analysis-results/alignments/",
+      "path": "/results/alignments/"
+    },
+    {
+      "name": "variant_calls",
+      "description": "Called variants in VCF format",
+      "type": "FILE",
+      "url": "s3://analysis-results/variants.vcf",
+      "path": "/results/variants.vcf"
+    },
+    {
+      "name": "expression_matrix",
+      "description": "Gene expression quantification",
+      "type": "FILE",
+      "url": "s3://analysis-results/expression.tsv",
+      "path": "/results/expression.tsv"
+    },
+    {
+      "name": "quality_reports",
+      "description": "Quality control reports",
+      "type": "DIRECTORY",
+      "url": "s3://analysis-results/qc_reports/",
+      "path": "/results/qc/"
+    },
+    {
+      "name": "final_report",
+      "description": "Comprehensive analysis report",
+      "type": "FILE",
+      "url": "s3://analysis-results/final_report.html",
+      "path": "/results/final_report.html"
+    }
+  ],
+  "executors": [
+    {
+      "image": "biocontainers/star:2.7.9a--h9ee0642_0",
+      "command": [
+        "bash",
+        "/scripts/run_analysis.sh"
+      ],
+      "workdir": "/workspace",
+      "env": {
+        "STAR_THREADS": "16",
+        "MEMORY_GB": "32",
+        "TEMP_DIR": "/tmp"
+      }
+    }
+  ],
+  "resources": {
+    "cpu_cores": 16,
+    "ram_gb": 64,
+    "disk_gb": 500,
+    "preemptible": false,
+    "zones": ["us-west-1a", "us-west-1b"]
+  },
+  "tags": {
+    "environment": "production",
+    "type": "bioinformatics",
+    "pipeline": "rna-seq",
+    "version": "3.2",
+    "cost_center": "research",
+    "priority": "high",
+    "estimated_runtime": "4-6 hours"
+  },
+  "volumes": [
+    "/tmp:/tmp",
+    "/scratch:/scratch"
+  ]
+}

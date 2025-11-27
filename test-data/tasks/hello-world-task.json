@@ -1,0 +1,46 @@
+{
+  "name": "hello-world-task",
+  "description": "A simple hello world task for testing TES functionality",
+  "inputs": [
+    {
+      "name": "input_message",
+      "description": "Message to echo",
+      "type": "FILE",
+      "url": "file:///tmp/input.txt",
+      "path": "/workspace/input.txt"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output_file",
+      "description": "Output file containing the message",
+      "type": "FILE",
+      "url": "file:///tmp/output.txt",
+      "path": "/workspace/output.txt"
+    }
+  ],
+  "executors": [
+    {
+      "image": "ubuntu:20.04",
+      "command": [
+        "bash",
+        "-c",
+        "echo 'Hello, World from TES!' > /workspace/output.txt && cat /workspace/input.txt >> /workspace/output.txt"
+      ],
+      "workdir": "/workspace",
+      "stdin": "/workspace/input.txt",
+      "stdout": "/workspace/output.txt"
+    }
+  ],
+  "resources": {
+    "cpu_cores": 1,
+    "ram_gb": 1,
+    "disk_gb": 1,
+    "preemptible": false
+  },
+  "tags": {
+    "environment": "test",
+    "type": "hello-world",
+    "version": "1.0"
+  }
+}

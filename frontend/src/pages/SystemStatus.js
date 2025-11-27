@@ -3,9 +3,10 @@ import styled from 'styled-components';
 import { Activity, Server, Cpu, Database, AlertTriangle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
-import { statusService } from '../services/statusService';
+import ServiceStatus from '../components/common/ServiceStatus';
+import axios from 'axios';
 import { taskService } from '../services/taskService';
-import { usePolling } from '../hooks/usePolling';
+import usePolling from '../hooks/usePolling';
 import { formatDateTime } from '../utils/formatters';
 import { TES_INSTANCES } from '../utils/constants';
 
@@ -236,28 +237,20 @@ const SystemStatus = () => {
       // Get dashboard data for overall stats
       const dashboardData = await taskService.getDashboardData();
       
-      // Check status of each TES instance
-      const instancePromises = TES_INSTANCES.map(async (instance) => {
-        try {
-          const tasks = await statusService.listTasks(instance.url);
-          return {
-            ...instance,
-            status: 'healthy',
-            taskCount: tasks?.tasks?.length || 0,
-            lastChecked: new Date().toISOString()
-          };
-        } catch (err) {
-          return {
-            ...instance,
-            status: 'error',
-            taskCount: 0,
-            lastChecked: new Date().toISOString(),
-            error: err.message
-          };
-        }
-      });
+      // Get service status data from our new service
+      const response = await axios.get('http://localhost:8000/api/service_status');
+      const statusData = response.data;
+      
+      // Map the service status data to the expected format
+      const instanceResults = statusData.services.map(service => ({
+        name: service.name,
+        url: service.url,
+        status: service.status === 'online' ? 'healthy' : 'error',
+        taskCount: 0, // We don't have task count from service status
+        lastChecked: service.last_checked,
+        error: service.details?.error || null
+      }));
 
-      const instanceResults = await Promise.all(instancePromises);
       setInstancesStatus(instanceResults);
 
       // Calculate system health
@@ -334,6 +327,8 @@ const SystemStatus = () => {
       </Header>
 
       {error && <ErrorMessage message={error} />}
+
+      <ServiceStatus />
 
       <StatusGrid>
         <StatusCard>

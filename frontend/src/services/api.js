@@ -1,18 +1,53 @@
 import axios from 'axios';
 
 // Determine API base URL based on environment
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' // Use relative path in production (nginx/proxy will handle routing)
-  : 'http://localhost:8000'; // Development backend
+const getApiBaseUrl = () => {
+  // Check for custom API URL first
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // For Kubernetes/production - use service name
+  if (process.env.NODE_ENV === 'production') {
+    return 'http://tesdashboardanalytics-backend-service.tesdashboardanalytics.svc.cluster.local:8000';
+  }
+  
+  // Development - use localhost
+  return 'http://localhost:8000';
+};
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000, // 10 second timeout
+  baseURL: getApiBaseUrl(),
+  timeout: 30000, // Increased timeout for K8s
   headers: {
     'Content-Type': 'application/json',
   }
 });
+
+// Add request interceptor for debugging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('❌ API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  (response) => {
+    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
+    return response;
+  },
+  (error) => {
+    console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.message);
+    return Promise.reject(error);
+  }
+);
 
 // Test connection to backend
 export const testConnection = async () => {

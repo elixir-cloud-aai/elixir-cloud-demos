@@ -1,6 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Server } from 'lucide-react';
+import { Server, LogOut, Shield } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const HeaderContainer = styled.header`
   background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -66,7 +67,57 @@ const StatusText = styled.span`
   font-weight: 500;
 `;
 
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-left: auto;
+`;
+
+const AdminStatus = styled.div`
+  display: flex;
+  align-items: center;
+  background: rgba(40, 167, 69, 0.2);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(40, 167, 69, 0.3);
+`;
+
+const AdminIcon = styled.div`
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+`;
+
+const LogoutButton = styled.button`
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  
+  &:hover {
+    background: rgba(220, 53, 69, 0.3);
+    border-color: rgba(220, 53, 69, 0.5);
+  }
+`;
+
 const Header = ({ connectionStatus = 'Connected', isConnected = true }) => {
+  const { isAuthenticated, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <HeaderContainer>
       <Logo>
@@ -79,10 +130,27 @@ const Header = ({ connectionStatus = 'Connected', isConnected = true }) => {
         </div>
       </Logo>
       
-      <StatusIndicator>
-        <StatusDot $connected={isConnected} />
-        <StatusText>{connectionStatus}</StatusText>
-      </StatusIndicator>
+      <HeaderActions>
+        {isAuthenticated && (
+          <>
+            <AdminStatus>
+              <AdminIcon>
+                <Shield size={14} />
+              </AdminIcon>
+              Admin Mode
+            </AdminStatus>
+            <LogoutButton onClick={handleLogout}>
+              <LogOut size={14} />
+              Logout
+            </LogoutButton>
+          </>
+        )}
+        
+        <StatusIndicator>
+          <StatusDot $connected={isConnected} />
+          <StatusText>{connectionStatus}</StatusText>
+        </StatusIndicator>
+      </HeaderActions>
     </HeaderContainer>
   );
 };

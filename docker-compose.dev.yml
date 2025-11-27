@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=true
+      - CORS_ORIGINS=http://localhost:3000
+      - TES_GATEWAY=https://tes-gateway.example.com
+      - UPLOAD_FOLDER=/app/uploads
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./backend/tes_instance_locations.json:/app/tes_instance_locations.json:ro
+    networks:
+      - tes-dev-network
+    command: python app.py
+    restart: unless-stopped
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - frontend-node-modules:/app/node_modules
+    networks:
+      - tes-dev-network
+    depends_on:
+      - backend-dev
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+networks:
+  tes-dev-network:
+    driver: bridge
+    name: tes-dashboard-dev-network
+
+volumes:
+  frontend-node-modules:

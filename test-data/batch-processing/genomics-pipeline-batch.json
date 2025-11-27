@@ -1,0 +1,251 @@
+{
+  "batch_id": "batch-003-genomics-pipeline",
+  "name": "Genomics Analysis Pipeline Batch",
+  "description": "Large-scale genomics analysis across multiple samples with comprehensive QC and variant calling",
+  "created_at": "2024-11-20T08:00:00Z",
+  "priority": "high",
+  "estimated_duration": "12-16 hours",
+  "tasks": [
+    {
+      "task_id": "qc-001",
+      "name": "Quality Control Sample 1",
+      "template": "genomics-qc-task",
+      "parameters": {
+        "sample_id": "SAMPLE_001",
+        "fastq_r1": "s3://genomics-data/SAMPLE_001_R1.fastq.gz",
+        "fastq_r2": "s3://genomics-data/SAMPLE_001_R2.fastq.gz",
+        "quality_threshold": 30
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "qc-002",
+      "name": "Quality Control Sample 2",
+      "template": "genomics-qc-task", 
+      "parameters": {
+        "sample_id": "SAMPLE_002",
+        "fastq_r1": "s3://genomics-data/SAMPLE_002_R1.fastq.gz",
+        "fastq_r2": "s3://genomics-data/SAMPLE_002_R2.fastq.gz",
+        "quality_threshold": 30
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "qc-003",
+      "name": "Quality Control Sample 3",
+      "template": "genomics-qc-task",
+      "parameters": {
+        "sample_id": "SAMPLE_003",
+        "fastq_r1": "s3://genomics-data/SAMPLE_003_R1.fastq.gz",
+        "fastq_r2": "s3://genomics-data/SAMPLE_003_R2.fastq.gz", 
+        "quality_threshold": 30
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "align-001",
+      "name": "Alignment Sample 1",
+      "template": "genomics-alignment-task",
+      "dependencies": ["qc-001"],
+      "parameters": {
+        "sample_id": "SAMPLE_001", 
+        "reference_genome": "s3://reference/hg38.fa",
+        "aligner": "bwa-mem"
+      },
+      "resources": {
+        "cpu_cores": 16,
+        "ram_gb": 32,
+        "disk_gb": 200
+      }
+    },
+    {
+      "task_id": "align-002",
+      "name": "Alignment Sample 2",
+      "template": "genomics-alignment-task",
+      "dependencies": ["qc-002"],
+      "parameters": {
+        "sample_id": "SAMPLE_002",
+        "reference_genome": "s3://reference/hg38.fa",
+        "aligner": "bwa-mem"
+      },
+      "resources": {
+        "cpu_cores": 16,
+        "ram_gb": 32,
+        "disk_gb": 200
+      }
+    },
+    {
+      "task_id": "align-003",
+      "name": "Alignment Sample 3",
+      "template": "genomics-alignment-task",
+      "dependencies": ["qc-003"],
+      "parameters": {
+        "sample_id": "SAMPLE_003",
+        "reference_genome": "s3://reference/hg38.fa", 
+        "aligner": "bwa-mem"
+      },
+      "resources": {
+        "cpu_cores": 16,
+        "ram_gb": 32,
+        "disk_gb": 200
+      }
+    },
+    {
+      "task_id": "variant-001",
+      "name": "Variant Calling Sample 1",
+      "template": "genomics-variant-calling-task",
+      "dependencies": ["align-001"],
+      "parameters": {
+        "sample_id": "SAMPLE_001",
+        "reference_genome": "s3://reference/hg38.fa",
+        "caller": "gatk-haplotypecaller",
+        "min_quality": 30
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16, 
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "variant-002",
+      "name": "Variant Calling Sample 2",
+      "template": "genomics-variant-calling-task",
+      "dependencies": ["align-002"],
+      "parameters": {
+        "sample_id": "SAMPLE_002",
+        "reference_genome": "s3://reference/hg38.fa",
+        "caller": "gatk-haplotypecaller",
+        "min_quality": 30
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "variant-003",
+      "name": "Variant Calling Sample 3", 
+      "template": "genomics-variant-calling-task",
+      "dependencies": ["align-003"],
+      "parameters": {
+        "sample_id": "SAMPLE_003",
+        "reference_genome": "s3://reference/hg38.fa",
+        "caller": "gatk-haplotypecaller",
+        "min_quality": 30
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "joint-genotyping",
+      "name": "Joint Genotyping Analysis",
+      "template": "genomics-joint-genotyping-task",
+      "dependencies": ["variant-001", "variant-002", "variant-003"],
+      "parameters": {
+        "cohort_name": "test_cohort",
+        "reference_genome": "s3://reference/hg38.fa",
+        "population_frequency_filter": 0.01
+      },
+      "resources": {
+        "cpu_cores": 16,
+        "ram_gb": 64,
+        "disk_gb": 300
+      }
+    },
+    {
+      "task_id": "annotation", 
+      "name": "Variant Annotation",
+      "template": "genomics-annotation-task",
+      "dependencies": ["joint-genotyping"],
+      "parameters": {
+        "annotation_db": "s3://annotations/clinvar_dbsnp.vcf",
+        "functional_prediction": true,
+        "population_frequencies": true
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 150
+      }
+    },
+    {
+      "task_id": "report-generation",
+      "name": "Generate Final Report",
+      "template": "genomics-report-task",
+      "dependencies": ["annotation"],
+      "parameters": {
+        "report_type": "comprehensive",
+        "include_qc_metrics": true,
+        "include_population_stats": true,
+        "output_format": ["html", "pdf"]
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    }
+  ],
+  "execution_settings": {
+    "parallel_limit": 6,
+    "retry_attempts": 3,
+    "timeout_minutes": 360,
+    "failure_tolerance": 0.0,
+    "dependency_resolution": true,
+    "stage_based_execution": true
+  },
+  "output_settings": {
+    "base_output_url": "s3://genomics-results/test-cohort/",
+    "log_level": "INFO",
+    "preserve_intermediate": true,
+    "compress_outputs": true,
+    "archive_after_days": 90
+  },
+  "notification_settings": {
+    "on_completion": ["genomics-team@example.com", "pi@example.com"],
+    "on_failure": ["genomics-team@example.com", "ops@example.com", "urgent@example.com"],
+    "on_progress": ["genomics-team@example.com"],
+    "progress_interval_minutes": 60,
+    "webhook_url": "https://hooks.example.com/genomics-batch-status",
+    "slack_channel": "#genomics-pipeline"
+  },
+  "scheduling": {
+    "start_time": "2024-11-20T20:00:00Z",
+    "max_runtime": "24 hours",
+    "priority_boost": "off_peak_hours",
+    "preemptible_allowed": false
+  },
+  "cost_management": {
+    "max_cost_usd": 500,
+    "cost_alerts_at": [100, 250, 400],
+    "use_spot_instances": true,
+    "cost_center": "genomics_research"
+  },
+  "tags": {
+    "environment": "production",
+    "type": "genomics-pipeline",
+    "batch_type": "dependency_dag",
+    "department": "bioinformatics", 
+    "project": "population_genetics",
+    "grant": "NIH_R01_12345",
+    "sla": "research_critical",
+    "data_type": "whole_genome_sequencing"
+  }
+}

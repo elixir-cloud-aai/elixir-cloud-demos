@@ -1,0 +1,21 @@
+# Sample Input Data for Testing
+
+This file serves as a sample input for testing TES tasks and workflows.
+
+## Content
+- Test message: Hello, World from TES!
+- Generated on: 2024-11-20
+- Purpose: Testing file input/output functionality
+- Sample ID: TEST_001
+
+## Parameters
+- Quality threshold: 0.95
+- Processing mode: standard
+- Output format: text
+
+## Data
+Sample data line 1
+Sample data line 2  
+Sample data line 3
+Sample data line 4
+Sample data line 5

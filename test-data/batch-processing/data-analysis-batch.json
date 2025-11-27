@@ -1,0 +1,122 @@
+{
+  "batch_id": "batch-002-data-analysis",
+  "name": "Large Scale Data Analysis Batch",
+  "description": "Batch processing of multiple datasets for comprehensive analysis",
+  "created_at": "2024-11-20T09:00:00Z",
+  "priority": "high",
+  "estimated_duration": "4-6 hours",
+  "tasks": [
+    {
+      "task_id": "data-001",
+      "name": "Dataset Alpha Analysis",
+      "template": "data-processing-task",
+      "parameters": {
+        "dataset_name": "alpha",
+        "input_url": "s3://datasets/alpha/data.csv",
+        "analysis_type": "comprehensive",
+        "quality_threshold": 0.95
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "data-002",
+      "name": "Dataset Beta Analysis",
+      "template": "data-processing-task", 
+      "parameters": {
+        "dataset_name": "beta",
+        "input_url": "s3://datasets/beta/data.csv",
+        "analysis_type": "comprehensive",
+        "quality_threshold": 0.95
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "data-003",
+      "name": "Dataset Gamma Analysis",
+      "template": "data-processing-task",
+      "parameters": {
+        "dataset_name": "gamma", 
+        "input_url": "s3://datasets/gamma/data.csv",
+        "analysis_type": "comprehensive",
+        "quality_threshold": 0.95
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16, 
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "data-004",
+      "name": "Dataset Delta Analysis",
+      "template": "data-processing-task",
+      "parameters": {
+        "dataset_name": "delta",
+        "input_url": "s3://datasets/delta/data.csv", 
+        "analysis_type": "comprehensive",
+        "quality_threshold": 0.95
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 100
+      }
+    },
+    {
+      "task_id": "merge-001",
+      "name": "Merge Analysis Results",
+      "template": "data-merge-task",
+      "dependencies": ["data-001", "data-002", "data-003", "data-004"],
+      "parameters": {
+        "merge_type": "comprehensive",
+        "output_format": "combined_report"
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    }
+  ],
+  "execution_settings": {
+    "parallel_limit": 4,
+    "retry_attempts": 3,
+    "timeout_minutes": 120,
+    "failure_tolerance": 0.05,
+    "dependency_resolution": true
+  },
+  "output_settings": {
+    "base_output_url": "s3://batch-results/data-analysis/",
+    "log_level": "DEBUG",
+    "preserve_intermediate": true,
+    "compress_outputs": true
+  },
+  "notification_settings": {
+    "on_completion": ["data-team@example.com", "manager@example.com"],
+    "on_failure": ["data-team@example.com", "ops@example.com"],
+    "on_progress": ["data-team@example.com"],
+    "webhook_url": "https://hooks.example.com/data-batch-status",
+    "slack_channel": "#data-processing"
+  },
+  "scheduling": {
+    "start_time": "2024-11-20T10:00:00Z",
+    "max_runtime": "8 hours",
+    "priority_boost": "peak_hours"
+  },
+  "tags": {
+    "environment": "production",
+    "type": "data-analysis", 
+    "batch_type": "dependency_graph",
+    "department": "data_science",
+    "cost_center": "analytics",
+    "sla": "business_critical"
+  }
+}

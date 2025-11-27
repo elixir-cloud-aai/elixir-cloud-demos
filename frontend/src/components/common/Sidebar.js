@@ -10,7 +10,9 @@ import {
   Settings, 
   Server,
   FileText,
-  BarChart3
+  BarChart3,
+  Network,
+  Wrench
 } from 'lucide-react';
 
 const SidebarContainer = styled.nav`
@@ -114,6 +116,24 @@ const Sidebar = () => {
         <NavItem to="/topology" $isActive={isActive('/topology')}>
           <NavIcon><BarChart3 size={18} /></NavIcon>
           <NavText>Network Topology</NavText>
+        </NavItem>
+      </NavSection>
+
+      <NavSection>
+        <SectionTitle>Utilities</SectionTitle>
+        <NavItem to="/utilities" $isActive={isActive('/utilities')}>
+          <NavIcon><Wrench size={18} /></NavIcon>
+          <NavText>Service Status</NavText>
+        </NavItem>
+        
+        <NavItem to="/instances" $isActive={isActive('/instances')}>
+          <NavIcon><Network size={18} /></NavIcon>
+          <NavText>Instance Management</NavText>
+        </NavItem>
+        
+        <NavItem to="/api-test" $isActive={isActive('/api-test')}>
+          <NavIcon><Activity size={18} /></NavIcon>
+          <NavText>API Test</NavText>
         </NavItem>
       </NavSection>
 

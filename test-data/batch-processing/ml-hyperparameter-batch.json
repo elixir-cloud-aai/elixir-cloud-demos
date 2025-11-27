@@ -1,0 +1,200 @@
+{
+  "batch_id": "batch-004-ml-hyperparameter-sweep",
+  "name": "Machine Learning Hyperparameter Optimization Batch",
+  "description": "Systematic hyperparameter optimization across multiple ML models and datasets",
+  "created_at": "2024-11-20T07:00:00Z",
+  "priority": "medium",
+  "estimated_duration": "6-8 hours", 
+  "tasks": [
+    {
+      "task_id": "ml-exp-001",
+      "name": "RandomForest Learning Rate Sweep",
+      "template": "ml-training-task",
+      "parameters": {
+        "model_type": "random_forest",
+        "dataset": "s3://ml-datasets/classification/dataset_a.csv",
+        "hyperparameters": {
+          "n_estimators": [100, 200, 500],
+          "max_depth": [10, 20, 30],
+          "min_samples_split": [2, 5, 10]
+        },
+        "cv_folds": 5
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "ml-exp-002", 
+      "name": "SVM Kernel Optimization",
+      "template": "ml-training-task",
+      "parameters": {
+        "model_type": "svm",
+        "dataset": "s3://ml-datasets/classification/dataset_a.csv",
+        "hyperparameters": {
+          "C": [0.1, 1.0, 10.0, 100.0],
+          "kernel": ["linear", "rbf", "poly"],
+          "gamma": ["scale", "auto", 0.001, 0.01]
+        },
+        "cv_folds": 5
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "ml-exp-003",
+      "name": "Neural Network Architecture Search",
+      "template": "ml-training-task",
+      "parameters": {
+        "model_type": "neural_network",
+        "dataset": "s3://ml-datasets/classification/dataset_a.csv",
+        "hyperparameters": {
+          "hidden_layers": [[64, 32], [128, 64, 32], [256, 128, 64]],
+          "learning_rate": [0.001, 0.01, 0.1],
+          "batch_size": [32, 64, 128],
+          "epochs": [50, 100, 200]
+        },
+        "cv_folds": 5
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 32,
+        "disk_gb": 100,
+        "gpu_count": 1,
+        "gpu_type": "nvidia-tesla-t4"
+      }
+    },
+    {
+      "task_id": "ml-exp-004",
+      "name": "Gradient Boosting Tuning",
+      "template": "ml-training-task",
+      "parameters": {
+        "model_type": "gradient_boosting",
+        "dataset": "s3://ml-datasets/classification/dataset_b.csv",
+        "hyperparameters": {
+          "n_estimators": [100, 200, 500],
+          "learning_rate": [0.01, 0.1, 0.2],
+          "max_depth": [3, 6, 9],
+          "subsample": [0.8, 0.9, 1.0]
+        },
+        "cv_folds": 5
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 16,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "ml-exp-005",
+      "name": "Deep Learning CNN Optimization",
+      "template": "dl-training-task",
+      "parameters": {
+        "model_type": "cnn",
+        "dataset": "s3://ml-datasets/images/dataset_c/", 
+        "hyperparameters": {
+          "conv_layers": [2, 3, 4],
+          "filters": [[32, 64], [64, 128], [32, 64, 128]],
+          "kernel_size": [3, 5],
+          "dropout_rate": [0.2, 0.3, 0.5],
+          "learning_rate": [0.001, 0.0001],
+          "batch_size": [16, 32, 64]
+        },
+        "epochs": 100,
+        "early_stopping": true
+      },
+      "resources": {
+        "cpu_cores": 8,
+        "ram_gb": 32,
+        "disk_gb": 200,
+        "gpu_count": 2,
+        "gpu_type": "nvidia-tesla-v100"
+      }
+    },
+    {
+      "task_id": "model-comparison",
+      "name": "Model Performance Comparison",
+      "template": "ml-evaluation-task",
+      "dependencies": ["ml-exp-001", "ml-exp-002", "ml-exp-003", "ml-exp-004", "ml-exp-005"],
+      "parameters": {
+        "metrics": ["accuracy", "precision", "recall", "f1_score", "auc_roc"],
+        "statistical_tests": true,
+        "generate_plots": true,
+        "confidence_intervals": true
+      },
+      "resources": {
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "disk_gb": 50
+      }
+    },
+    {
+      "task_id": "best-model-training",
+      "name": "Final Model Training",
+      "template": "ml-production-training-task", 
+      "dependencies": ["model-comparison"],
+      "parameters": {
+        "use_best_hyperparameters": true,
+        "full_dataset": "s3://ml-datasets/classification/full_dataset.csv",
+        "model_validation": true,
+        "export_format": ["onnx", "pickle", "joblib"]
+      },
+      "resources": {
+        "cpu_cores": 16,
+        "ram_gb": 32,
+        "disk_gb": 100,
+        "gpu_count": 1,
+        "gpu_type": "nvidia-tesla-v100"
+      }
+    }
+  ],
+  "execution_settings": {
+    "parallel_limit": 5,
+    "retry_attempts": 2,
+    "timeout_minutes": 240,
+    "failure_tolerance": 0.1,
+    "dependency_resolution": true,
+    "resource_optimization": true
+  },
+  "output_settings": {
+    "base_output_url": "s3://ml-experiments/hyperparameter-sweep/",
+    "log_level": "INFO",
+    "preserve_intermediate": false,
+    "compress_outputs": true,
+    "model_versioning": true
+  },
+  "notification_settings": {
+    "on_completion": ["ml-team@example.com", "data-science@example.com"],
+    "on_failure": ["ml-team@example.com", "ops@example.com"],
+    "on_progress": ["ml-team@example.com"],
+    "progress_interval_minutes": 30,
+    "webhook_url": "https://hooks.example.com/ml-batch-status",
+    "slack_channel": "#machine-learning"
+  },
+  "scheduling": {
+    "start_time": "2024-11-20T22:00:00Z",
+    "max_runtime": "12 hours",
+    "priority_boost": "gpu_availability",
+    "preemptible_allowed": true
+  },
+  "cost_management": {
+    "max_cost_usd": 200,
+    "cost_alerts_at": [50, 100, 150],
+    "use_spot_instances": true,
+    "cost_center": "ml_research"
+  },
+  "tags": {
+    "environment": "research",
+    "type": "ml-hyperparameter-optimization",
+    "batch_type": "parameter_sweep",
+    "department": "data_science",
+    "project": "model_optimization",
+    "framework": "scikit_learn_pytorch",
+    "sla": "research_standard"
+  }
+}

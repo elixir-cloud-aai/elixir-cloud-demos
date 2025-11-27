@@ -1,0 +1,102 @@
+{
+  "batch_id": "batch-001-hello-world",
+  "name": "Hello World Batch Processing",
+  "description": "Batch execution of simple hello world tasks for testing",
+  "created_at": "2024-11-20T10:00:00Z",
+  "priority": "normal",
+  "estimated_duration": "30 minutes",
+  "tasks": [
+    {
+      "task_id": "hw-001",
+      "name": "Hello World Task 1",
+      "template": "hello-world-task",
+      "parameters": {
+        "message": "Hello from Task 1!",
+        "output_prefix": "task1"
+      },
+      "resources": {
+        "cpu_cores": 1,
+        "ram_gb": 1,
+        "disk_gb": 5
+      }
+    },
+    {
+      "task_id": "hw-002", 
+      "name": "Hello World Task 2",
+      "template": "hello-world-task",
+      "parameters": {
+        "message": "Hello from Task 2!",
+        "output_prefix": "task2"
+      },
+      "resources": {
+        "cpu_cores": 1,
+        "ram_gb": 1,
+        "disk_gb": 5
+      }
+    },
+    {
+      "task_id": "hw-003",
+      "name": "Hello World Task 3", 
+      "template": "hello-world-task",
+      "parameters": {
+        "message": "Hello from Task 3!",
+        "output_prefix": "task3"
+      },
+      "resources": {
+        "cpu_cores": 1,
+        "ram_gb": 1,
+        "disk_gb": 5
+      }
+    },
+    {
+      "task_id": "hw-004",
+      "name": "Hello World Task 4",
+      "template": "hello-world-task", 
+      "parameters": {
+        "message": "Hello from Task 4!",
+        "output_prefix": "task4"
+      },
+      "resources": {
+        "cpu_cores": 1,
+        "ram_gb": 1,
+        "disk_gb": 5
+      }
+    },
+    {
+      "task_id": "hw-005",
+      "name": "Hello World Task 5",
+      "template": "hello-world-task",
+      "parameters": {
+        "message": "Hello from Task 5!",
+        "output_prefix": "task5"
+      },
+      "resources": {
+        "cpu_cores": 1,
+        "ram_gb": 1,
+        "disk_gb": 5
+      }
+    }
+  ],
+  "execution_settings": {
+    "parallel_limit": 3,
+    "retry_attempts": 2,
+    "timeout_minutes": 15,
+    "failure_tolerance": 0.1
+  },
+  "output_settings": {
+    "base_output_url": "s3://batch-results/hello-world/",
+    "log_level": "INFO",
+    "preserve_intermediate": true
+  },
+  "notification_settings": {
+    "on_completion": ["admin@example.com"],
+    "on_failure": ["admin@example.com", "ops@example.com"],
+    "webhook_url": "https://hooks.example.com/batch-status"
+  },
+  "tags": {
+    "environment": "test",
+    "type": "hello-world",
+    "batch_type": "parallel",
+    "cost_center": "testing"
+  }
+}

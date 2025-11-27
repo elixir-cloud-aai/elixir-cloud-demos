@@ -1,0 +1,29 @@
+{
+  "analysis": {
+    "type": "comprehensive",
+    "mode": "standard",
+    "quality_threshold": 0.95,
+    "output_format": "json"
+  },
+  "resources": {
+    "cpu_cores": 4,
+    "memory_gb": 8,
+    "disk_gb": 50,
+    "timeout_minutes": 60
+  },
+  "processing": {
+    "parallel_jobs": 2,
+    "retry_attempts": 3,
+    "log_level": "INFO"
+  },
+  "output": {
+    "preserve_intermediate": true,
+    "compress_results": false,
+    "generate_report": true
+  },
+  "notification": {
+    "email_on_completion": true,
+    "email_on_failure": true,
+    "webhook_enabled": false
+  }
+}
