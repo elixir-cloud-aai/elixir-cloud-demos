@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import api, { testConnection, fetchDashboardData } from '../services/api';
 import { taskService } from '../services/taskService';
-import { serviceStatusService } from '../services/serviceStatusService';
 import { statusService } from '../services/statusService';
 import { serviceInfoService } from '../services/serviceInfoService';
 import { workflowService } from '../services/workflowService';
@@ -78,17 +77,9 @@ const ApiTest = () => {
       addResult('tasks', false, `Tasks failed: ${error.message}`);
     }
 
-    // Test 4: Service status
+    // Test 4: Service info
     try {
-      const status = await serviceStatusService.getServiceStatus();
-      addResult('serviceStatus', true, 'Service status loaded successfully');
-    } catch (error) {
-      addResult('serviceStatus', false, `Service status failed: ${error.message}`);
-    }
-
-    // Test 5: Service info
-    try {
-      const info = await serviceInfoService.getServiceInfo('/');
+      const info = await serviceInfoService.getServiceInfo('http://localhost:8000');
       addResult('serviceInfo', true, 'Service info loaded successfully');
     } catch (error) {
       addResult('serviceInfo', false, `Service info failed: ${error.message}`);

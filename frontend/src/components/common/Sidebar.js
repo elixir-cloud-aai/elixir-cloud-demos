@@ -98,11 +98,6 @@ const Sidebar = () => {
 
       <NavSection>
         <SectionTitle>Monitoring</SectionTitle>
-        <NavItem to="/status" $isActive={isActive('/status')}>
-          <NavIcon><Activity size={18} /></NavIcon>
-          <NavText>System Status</NavText>
-        </NavItem>
-        
         <NavItem to="/service-info" $isActive={isActive('/service-info')}>
           <NavIcon><Server size={18} /></NavIcon>
           <NavText>Service Info</NavText>

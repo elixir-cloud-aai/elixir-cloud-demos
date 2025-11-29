@@ -11,7 +11,6 @@ import TaskDetails from './pages/TaskDetails';
 import SubmitTask from './pages/SubmitTask';
 import Workflows from './pages/Workflows';
 import BatchProcessing from './pages/BatchProcessing';
-import SystemStatus from './pages/SystemStatus';
 import ServiceInfo from './pages/ServiceInfo';
 import Logs from './pages/Logs';
 import NetworkTopology from './pages/NetworkTopology';
@@ -75,7 +74,6 @@ function App() {
                 <Route path="/submit-task" element={<SubmitTask />} />
                 <Route path="/workflows" element={<Workflows />} />
                 <Route path="/batch" element={<BatchProcessing />} />
-                <Route path="/status" element={<SystemStatus />} />
                 <Route path="/service-info" element={<ServiceInfo />} />
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/topology" element={<NetworkTopology />} />
