@@ -4,7 +4,7 @@ import { Activity, Server, Cpu, Database, AlertTriangle, CheckCircle, XCircle, R
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ServiceStatus from '../components/common/ServiceStatus';
-import axios from 'axios';
+import api from '../services/api';
 import { taskService } from '../services/taskService';
 import usePolling from '../hooks/usePolling';
 import { formatDateTime } from '../utils/formatters';
@@ -238,7 +238,7 @@ const SystemStatus = () => {
       const dashboardData = await taskService.getDashboardData();
       
       // Get service status data from our new service
-      const response = await axios.get('http://localhost:8000/api/service_status');
+      const response = await api.get('/service_status');
       const statusData = response.data;
       
       // Map the service status data to the expected format
