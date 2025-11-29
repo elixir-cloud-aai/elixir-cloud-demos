@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
-import axios from 'axios';
+import api from '../../services/api';
 
 const StatusIndicatorContainer = styled.div.withConfig({
   shouldForwardProp: (prop) => !['clickable', 'status'].includes(prop),
@@ -97,7 +97,7 @@ const ServiceStatusIndicator = ({
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/api/service_status');
+        const response = await api.get('/service_status');
         const data = response.data;
         // Extract summary data from the full response
         const summaryData = {

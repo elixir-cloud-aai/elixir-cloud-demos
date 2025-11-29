@@ -246,7 +246,7 @@ const Utilities = () => {
     const gatewayService = {
       id: 'gateway',
       name: 'TES Gateway',
-      url: 'http://localhost:8000',
+      url: '',
       isGateway: true
     };
     

@@ -13,7 +13,7 @@ const getApiBaseUrl = () => {
   }
   
   // Development - use localhost
-  return 'http://localhost:8000';
+  return '';
 };
 
 // Create axios instance with default config

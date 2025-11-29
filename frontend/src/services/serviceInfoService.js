@@ -72,7 +72,7 @@ export const serviceInfoService = {
       
       return {
         environment: process.env.NODE_ENV || 'development',
-        apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+        apiUrl: process.env.REACT_APP_API_URL || '',
         version: '1.0.0',
         buildDate: new Date().toISOString(),
         tesInstances: dashboardData.tes_instances?.length || 0,

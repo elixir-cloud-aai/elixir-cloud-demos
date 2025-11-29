@@ -386,7 +386,7 @@ const InstanceManagement = () => {
       setLoading(true);
       
       // Load managed instances (user-configurable)
-      const managedResponse = await fetch('http://localhost:8000/api/nodes');
+      const managedResponse = await fetch('/api/nodes');
       if (managedResponse.ok) {
         const managedData = await managedResponse.json();
         console.log('Loaded managed instances data:', managedData);
@@ -404,7 +404,7 @@ const InstanceManagement = () => {
       }
 
       // Load available instances (discovered/preconfigured)
-      const availableResponse = await fetch('http://localhost:8000/api/instances');
+      const availableResponse = await fetch('/api/instances');
       if (availableResponse.ok) {
         const availableData = await availableResponse.json();
         console.log('Loaded available instances data:', availableData);
@@ -445,7 +445,7 @@ const InstanceManagement = () => {
         lng: 0
       };
 
-      const response = await fetch('http://localhost:8000/api/nodes', {
+      const response = await fetch('/api/nodes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -472,7 +472,7 @@ const InstanceManagement = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/nodes/${instanceId}`, {
+      const response = await fetch(`/api/nodes/${instanceId}`, {
         method: 'DELETE'
       });
 

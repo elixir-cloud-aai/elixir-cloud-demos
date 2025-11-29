@@ -88,7 +88,7 @@ const ApiTest = () => {
 
     // Test 5: Service info
     try {
-      const info = await serviceInfoService.getServiceInfo('http://localhost:8000');
+      const info = await serviceInfoService.getServiceInfo('/');
       addResult('serviceInfo', true, 'Service info loaded successfully');
     } catch (error) {
       addResult('serviceInfo', false, `Service info failed: ${error.message}`);

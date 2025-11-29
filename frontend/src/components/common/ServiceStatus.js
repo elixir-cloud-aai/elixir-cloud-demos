@@ -11,7 +11,7 @@ import {
   Zap,
   Activity
 } from 'lucide-react';
-import axios from 'axios';
+import api from '../../services/api';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
 import { formatDate } from '../../utils/formatters';
@@ -281,8 +281,8 @@ const ServiceStatus = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching service status from:', 'http://localhost:8000/api/service_status');
-      const response = await axios.get('http://localhost:8000/api/service_status');
+      console.log('Fetching service status from API service');
+      const response = await api.get('/service_status');
       setStatusData(response.data);
       setLastUpdated(new Date().toISOString());
     } catch (err) {

@@ -180,3 +180,5 @@ poetry.toml
 .netrc
 results/
 .snakemake/
+
+k8s/
