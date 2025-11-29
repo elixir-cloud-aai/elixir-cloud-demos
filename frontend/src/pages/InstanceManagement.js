@@ -11,6 +11,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import api from '../services/api';
 
 const Container = styled.div`
   padding: 20px;
@@ -386,9 +387,9 @@ const InstanceManagement = () => {
       setLoading(true);
       
       // Load managed instances (user-configurable)
-      const managedResponse = await fetch('/api/nodes');
-      if (managedResponse.ok) {
-        const managedData = await managedResponse.json();
+      try {
+        const managedResponse = await api.get('/nodes');
+        const managedData = managedResponse.data;
         console.log('Loaded managed instances data:', managedData);
         if (Array.isArray(managedData)) {
           setManagedInstances(managedData);
@@ -398,15 +399,15 @@ const InstanceManagement = () => {
           console.warn('Managed instances API returned non-array data:', managedData);
           setManagedInstances([]);
         }
-      } else {
-        console.error('Failed to load managed instances:', managedResponse.status);
+      } catch (managedError) {
+        console.error('Failed to load managed instances:', managedError);
         setManagedInstances([]);
       }
 
       // Load available instances (discovered/preconfigured)
-      const availableResponse = await fetch('/api/instances');
-      if (availableResponse.ok) {
-        const availableData = await availableResponse.json();
+      try {
+        const availableResponse = await api.get('/instances');
+        const availableData = availableResponse.data;
         console.log('Loaded available instances data:', availableData);
         if (Array.isArray(availableData)) {
           setAvailableInstances(availableData);
@@ -414,8 +415,8 @@ const InstanceManagement = () => {
           console.warn('Available instances API returned non-array data:', availableData);
           setAvailableInstances([]);
         }
-      } else {
-        console.error('Failed to load available instances:', availableResponse.status);
+      } catch (availableError) {
+        console.error('Failed to load available instances:', availableError);
         setAvailableInstances([]);
       }
     } catch (error) {
@@ -445,7 +446,7 @@ const InstanceManagement = () => {
         lng: 0
       };
 
-      const response = await fetch('/api/nodes', {
+      const response = await fetch('http://localhost:8000/api/nodes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -472,7 +473,7 @@ const InstanceManagement = () => {
     }
 
     try {
-      const response = await fetch(`/api/nodes/${instanceId}`, {
+      const response = await fetch(`http://localhost:8000/api/nodes/${instanceId}`, {
         method: 'DELETE'
       });
 
