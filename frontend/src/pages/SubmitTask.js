@@ -5,6 +5,7 @@ import api, { fetchDashboardData, testConnection } from '../services/api';
 import { taskService } from '../services/taskService';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import { TES_INSTANCES } from '../utils/constants';
 import { ArrowLeft, Play } from 'lucide-react';
 
 const PageContainer = styled.div`
@@ -261,12 +262,19 @@ const SubmitTask = () => {
         }
       }
       
+      // Fallback: Use static constants if no instances loaded from API
+      if (instances.length === 0) {
+        console.log('🔄 No instances from API, using fallback constants');
+        instances = [...TES_INSTANCES];
+        console.log('✅ Using static TES_INSTANCES as fallback:', instances);
+      }
+      
       // Remove duplicates by URL
       const uniqueInstances = instances.filter((instance, index, self) => 
         index === self.findIndex(i => i.url === instance.url)
       );
       
-      console.log('Loaded TES instances:', uniqueInstances);
+      console.log(`📊 Final loaded TES instances (${uniqueInstances.length}):`, uniqueInstances);
       setTesInstances(uniqueInstances);
       
     } catch (err) {

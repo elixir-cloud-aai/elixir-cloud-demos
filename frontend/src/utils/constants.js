@@ -97,10 +97,11 @@ export const THEME = {
   DARK: '#343a40'
 };
 
-// TES Instances - These should match the backend configuration
+// TES Instances - These match the backend configuration
 export const TES_INSTANCES = [
-  { name: 'Local TES', url: 'http://127.0.0.1:8000' },
-  { name: 'TESK Prod EU', url: 'https://tesk-prod.cloud.e-infra.cz' },
-  { name: 'TESK NA', url: 'https://tesk-na.cloud.e-infra.cz' },
-  { name: 'Funnel Local', url: 'http://localhost:8000' }
+  { name: 'TESK Production', url: 'https://tesk-prod.cloud.e-infra.cz', id: 'elixir-cz' },
+  { name: 'TESK/OpenShift @ ELIXIR-FI', url: 'https://csc-tesk-noauth.rahtiapp.fi/ga4gh/tes', id: 'elixir-fi' },
+  { name: 'TESK/Kubernetes @ ELIXIR-GR', url: 'https://tesk.c3g.calculquebec.ca', id: 'elixir-gr' },
+  { name: 'TESK North America', url: 'https://tesk-na.cloud.e-infra.cz', id: 'elixir-ca' },
+  { name: 'Funnel/OpenPBS @ ELIXIR-CZ', url: 'https://funnel.cloud.e-infra.cz', id: 'funnel-cz' }
 ];
