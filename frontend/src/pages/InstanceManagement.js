@@ -388,35 +388,43 @@ const InstanceManagement = () => {
       
       // Load managed instances (user-configurable)
       try {
-        const managedResponse = await api.get('/nodes');
+        console.log('🔄 Loading managed instances from /api/nodes');
+        const managedResponse = await api.get('/api/nodes');
         const managedData = managedResponse.data;
-        console.log('Loaded managed instances data:', managedData);
+        console.log('✅ Loaded managed instances data:', managedData);
+        
         if (Array.isArray(managedData)) {
           setManagedInstances(managedData);
+          console.log(`📋 Set ${managedData.length} managed instances`);
         } else if (managedData && managedData.nodes && Array.isArray(managedData.nodes)) {
           setManagedInstances(managedData.nodes);
+          console.log(`📋 Set ${managedData.nodes.length} managed instances from .nodes property`);
         } else {
           console.warn('Managed instances API returned non-array data:', managedData);
           setManagedInstances([]);
         }
       } catch (managedError) {
-        console.error('Failed to load managed instances:', managedError);
+        console.error('❌ Failed to load managed instances:', managedError);
         setManagedInstances([]);
       }
 
       // Load available instances (discovered/preconfigured)
       try {
-        const availableResponse = await api.get('/instances');
+        console.log('🔄 Loading available instances from /api/instances');
+        const availableResponse = await api.get('/api/instances');
         const availableData = availableResponse.data;
-        console.log('Loaded available instances data:', availableData);
+        console.log('✅ Loaded available instances data:', availableData);
+        
         if (Array.isArray(availableData)) {
           setAvailableInstances(availableData);
+          console.log(`📋 Set ${availableData.length} available instances`);
         } else {
           console.warn('Available instances API returned non-array data:', availableData);
           setAvailableInstances([]);
         }
       } catch (availableError) {
-        console.error('Failed to load available instances:', availableError);
+        console.error('❌ Failed to load available instances:', availableError);
+        console.log('💡 Note: Available instances endpoint may not be implemented yet');
         setAvailableInstances([]);
       }
     } catch (error) {
