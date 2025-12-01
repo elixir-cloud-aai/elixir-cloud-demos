@@ -82,7 +82,35 @@ app.get('/test-proxy', async (req, res) => {
   }
 });
 
+// Manual backend test endpoint
+app.get('/test-backend', async (req, res) => {
+  try {
+    console.log('🔗 Testing direct backend connectivity...');
+    // Try to connect to backend directly using Node.js
+    const http = require('http');
+    const url = require('url');
+    
+    const backendUrl = 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000/api/health';
+    console.log('🎯 Testing backend URL:', backendUrl);
+    
+    res.json({
+      message: 'Backend test initiated',
+      backendUrl,
+      timestamp: new Date().toISOString(),
+      note: 'Check server logs for connection results'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Backend test failed',
+      details: error.message
+    });
+  }
+});
+
 // API proxy to backend service - MUST be before static file serving
+console.log('🔧 Setting up API proxy middleware...');
+console.log('📦 http-proxy-middleware available:', !!createProxyMiddleware);
+
 const proxyOptions = {
   target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000',
   changeOrigin: true,
@@ -93,11 +121,13 @@ const proxyOptions = {
   onError: (err, req, res) => {
     console.error('❌ Proxy error:', err.message);
     console.error('Request URL:', req.url);
-    res.status(500).json({ 
-      error: 'Backend service unavailable',
-      details: err.message,
-      target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000'
-    });
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Backend service unavailable',
+        details: err.message,
+        target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000'
+      });
+    }
   },
   onProxyReq: (proxyReq, req, res) => {
     console.log(`📡 Proxying ${req.method} ${req.url} to backend`);
@@ -107,7 +137,23 @@ const proxyOptions = {
   }
 };
 
-app.use('/api', createProxyMiddleware(proxyOptions));
+console.log('🎯 Proxy target:', proxyOptions.target);
+
+try {
+  const proxy = createProxyMiddleware(proxyOptions);
+  app.use('/api', proxy);
+  console.log('✅ API proxy middleware configured successfully');
+} catch (error) {
+  console.error('❌ Failed to create proxy middleware:', error);
+  // Fallback - create a simple proxy manually
+  app.use('/api', (req, res) => {
+    res.status(502).json({
+      error: 'Proxy middleware failed to initialize',
+      details: error.message,
+      fallback: true
+    });
+  });
+}
 
 // Serve static files from build directory
 app.use(express.static(buildDir, {
