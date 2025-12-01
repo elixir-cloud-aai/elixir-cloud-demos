@@ -206,21 +206,32 @@ const SubmitTask = () => {
       
       let instances = [];
       
+      // Debug API responses
+      console.log('API Responses:', {
+        dashboardData: dashboardData.status === 'fulfilled' ? 'success' : dashboardData.reason?.message || 'failed',
+        instancesData: instancesData.status === 'fulfilled' ? 'success' : instancesData.reason?.message || 'failed', 
+        nodesData: nodesData.status === 'fulfilled' ? 'success' : nodesData.reason?.message || 'failed'
+      });
+      
       // Add instances from dashboard data
       if (dashboardData.status === 'fulfilled' && dashboardData.value?.tes_instances) {
+        console.log('Adding instances from dashboard_data:', dashboardData.value.tes_instances);
         instances = [...instances, ...dashboardData.value.tes_instances];
       }
       
       // Add instances from /instances endpoint
       if (instancesData.status === 'fulfilled' && Array.isArray(instancesData.value?.data)) {
+        console.log('Adding instances from /instances:', instancesData.value.data);
         instances = [...instances, ...instancesData.value.data];
       }
       
       // Add instances from /nodes endpoint
       if (nodesData.status === 'fulfilled' && nodesData.value?.data?.nodes) {
+        console.log('Adding instances from /nodes:', nodesData.value.data.nodes);
         const nodes = nodesData.value.data.nodes.map(node => ({
           name: node.name,
-          url: node.url
+          url: node.url,
+          id: node.id
         }));
         instances = [...instances, ...nodes];
       }
