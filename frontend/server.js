@@ -53,8 +53,33 @@ app.get('/debug', (req, res) => {
     buildExists,
     indexExists,
     files,
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    serverVersion: 'v2.0-fixed-proxy',
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+      PORT: process.env.PORT
+    },
+    proxyTarget: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000'
   });
+});
+
+// Test proxy endpoint to check backend connectivity
+app.get('/test-proxy', async (req, res) => {
+  try {
+    console.log('🧪 Testing proxy connectivity to backend...');
+    // This should work if proxy is properly configured
+    res.json({
+      message: 'Test proxy endpoint works',
+      timestamp: new Date().toISOString(),
+      note: 'If you see this, Express server is running but API proxy may still have issues'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Test proxy failed',
+      details: error.message
+    });
+  }
 });
 
 // API proxy to backend service - MUST be before static file serving
