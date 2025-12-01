@@ -197,43 +197,68 @@ const SubmitTask = () => {
   const loadTesInstances = async () => {
     try {
       setLoading(true);
-      // Try to load from both endpoints to get comprehensive instance list
-      const [dashboardData, instancesData, nodesData] = await Promise.allSettled([
-        fetchDashboardData(),
-        api.get('/instances'),
-        api.get('/nodes')
-      ]);
       
+      // WORKAROUND: Use root API endpoint that works until proxy is fixed
       let instances = [];
       
-      // Debug API responses
-      console.log('API Responses:', {
-        dashboardData: dashboardData.status === 'fulfilled' ? 'success' : dashboardData.reason?.message || 'failed',
-        instancesData: instancesData.status === 'fulfilled' ? 'success' : instancesData.reason?.message || 'failed', 
-        nodesData: nodesData.status === 'fulfilled' ? 'success' : nodesData.reason?.message || 'failed'
-      });
-      
-      // Add instances from dashboard data
-      if (dashboardData.status === 'fulfilled' && dashboardData.value?.tes_instances) {
-        console.log('Adding instances from dashboard_data:', dashboardData.value.tes_instances);
-        instances = [...instances, ...dashboardData.value.tes_instances];
-      }
-      
-      // Add instances from /instances endpoint
-      if (instancesData.status === 'fulfilled' && Array.isArray(instancesData.value?.data)) {
-        console.log('Adding instances from /instances:', instancesData.value.data);
-        instances = [...instances, ...instancesData.value.data];
-      }
-      
-      // Add instances from /nodes endpoint
-      if (nodesData.status === 'fulfilled' && nodesData.value?.data?.nodes) {
-        console.log('Adding instances from /nodes:', nodesData.value.data.nodes);
-        const nodes = nodesData.value.data.nodes.map(node => ({
-          name: node.name,
-          url: node.url,
-          id: node.id
-        }));
-        instances = [...instances, ...nodes];
+      try {
+        // Try to get embedded data from root endpoint (workaround)
+        const rootResponse = await api.get('/');
+        console.log('🔄 Using workaround: loading instances from root endpoint');
+        
+        if (rootResponse.data?.workaround_data?.nodes) {
+          const nodes = rootResponse.data.workaround_data.nodes.map(node => ({
+            name: node.name,
+            url: node.url,
+            id: node.id
+          }));
+          instances = [...instances, ...nodes];
+          console.log('✅ Loaded instances from workaround data:', instances);
+        }
+        
+        if (rootResponse.data?.workaround_data?.instances) {
+          instances = [...instances, ...rootResponse.data.workaround_data.instances];
+        }
+        
+      } catch (workaroundError) {
+        console.warn('Workaround failed, trying regular endpoints:', workaroundError);
+        
+        // Fallback to regular API calls
+        const [dashboardData, instancesData, nodesData] = await Promise.allSettled([
+          fetchDashboardData(),
+          api.get('/instances'),
+          api.get('/nodes')
+        ]);
+        
+        // Debug API responses
+        console.log('API Responses:', {
+          dashboardData: dashboardData.status === 'fulfilled' ? 'success' : dashboardData.reason?.message || 'failed',
+          instancesData: instancesData.status === 'fulfilled' ? 'success' : instancesData.reason?.message || 'failed', 
+          nodesData: nodesData.status === 'fulfilled' ? 'success' : nodesData.reason?.message || 'failed'
+        });
+        
+        // Add instances from dashboard data
+        if (dashboardData.status === 'fulfilled' && dashboardData.value?.tes_instances) {
+          console.log('Adding instances from dashboard_data:', dashboardData.value.tes_instances);
+          instances = [...instances, ...dashboardData.value.tes_instances];
+        }
+        
+        // Add instances from /instances endpoint
+        if (instancesData.status === 'fulfilled' && Array.isArray(instancesData.value?.data)) {
+          console.log('Adding instances from /instances:', instancesData.value.data);
+          instances = [...instances, ...instancesData.value.data];
+        }
+        
+        // Add instances from /nodes endpoint
+        if (nodesData.status === 'fulfilled' && nodesData.value?.data?.nodes) {
+          console.log('Adding instances from /nodes:', nodesData.value.data.nodes);
+          const nodes = nodesData.value.data.nodes.map(node => ({
+            name: node.name,
+            url: node.url,
+            id: node.id
+          }));
+          instances = [...instances, ...nodes];
+        }
       }
       
       // Remove duplicates by URL

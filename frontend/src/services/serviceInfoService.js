@@ -17,7 +17,22 @@ export const serviceInfoService = {
           return response.data;
         }
       } catch (apiError) {
-        console.warn('Failed to get real service info, falling back to mock data:', apiError);
+        console.warn('Failed to get real service info from /api/service_info, trying workaround:', apiError);
+        
+        // WORKAROUND: Try to access service_info through backend direct URL
+        try {
+          // Access backend directly since proxy isn't working
+          const backendUrl = 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
+          const directResponse = await fetch(`${backendUrl}/api/service_info?tes_url=${encodeURIComponent(tesUrl)}`);
+          
+          if (directResponse.ok) {
+            const serviceData = await directResponse.json();
+            console.log('✅ Got real service info via direct backend access:', serviceData);
+            return serviceData;
+          }
+        } catch (directError) {
+          console.warn('Direct backend access failed:', directError);
+        }
       }
       
       // Fallback: Use dashboard data to get TES instances info

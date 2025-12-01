@@ -1447,7 +1447,16 @@ def get_storage_locations():
 
 @app.route('/')
 def index():
-    """Root endpoint - API information"""
+    """Root endpoint - API information with embedded data for proxy workaround"""
+    # Get nodes data for frontend workaround
+    try:
+        with open(os.path.join(os.path.dirname(__file__), 'tes_instance_locations.json'), 'r') as f:
+            locations_data = json.load(f)
+            nodes = locations_data.get('nodes', [])
+    except Exception as e:
+        print(f"Error loading nodes: {e}")
+        nodes = []
+    
     return jsonify({
         'message': 'TES Dashboard API',
         'version': '1.0.0',
@@ -1477,6 +1486,12 @@ def index():
             'total_workflows': len(workflow_runs),
             'total_batch_runs': len(batch_runs),
             'available_instances': len(TES_INSTANCES)
+        },
+        # Embedded data for proxy workaround - accessible via /api/
+        'workaround_data': {
+            'nodes': nodes,
+            'instances': TES_INSTANCES,
+            'tes_instances': TES_INSTANCES  # For compatibility with different frontend calls
         }
     })
 
