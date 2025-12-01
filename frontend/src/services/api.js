@@ -3,16 +3,12 @@ import axios from 'axios';
 // Determine API base URL based on environment
 const getApiBaseUrl = () => {
   // Check for custom API URL first
-  if (process.env.REACT_APP_API_URL) {
+  if (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim() !== '') {
     return process.env.REACT_APP_API_URL;
   }
   
-  // For Kubernetes/production - use service name
-  if (process.env.NODE_ENV === 'production') {
-    return 'http://tesdashboardanalytics-backend-service.tesdashboardanalytics.svc.cluster.local:8000';
-  }
-  
-  // Development - use localhost
+  // For both development and production, use relative URLs
+  // The Express server will proxy /api/* requests to the backend
   return '';
 };
 
