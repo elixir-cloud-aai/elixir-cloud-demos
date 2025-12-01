@@ -7,6 +7,7 @@ import { statusService } from '../services/statusService';
 import { taskService } from '../services/taskService';
 import { workflowService } from '../services/workflowService';
 import { batchService } from '../services/batchService';
+import { logService } from '../services/logService';
 import { formatDateTime } from '../utils/formatters';
 
 const LogsContainer = styled.div`
@@ -236,7 +237,7 @@ const Logs = () => {
       if (Array.isArray(dashboardData.submitted_tasks)) {
         for (const task of dashboardData.submitted_tasks.slice(-10)) { // Latest 10 tasks
           try {
-            const logContent = await statusService.getTaskLogs(task.task_id);
+            const logContent = await logService.getTaskLogs(task.task_id);
             allLogs.push({
               id: task.task_id,
               type: 'task',
@@ -268,7 +269,7 @@ const Logs = () => {
       if (Array.isArray(dashboardData.workflow_runs)) {
         for (const workflow of dashboardData.workflow_runs.slice(-10)) { // Latest 10 workflows
           try {
-            const logContent = await workflowService.getWorkflowLogs(workflow.run_id);
+            const logContent = await logService.getWorkflowLogs(workflow.run_id);
             allLogs.push({
               id: workflow.run_id,
               type: 'workflow',
@@ -303,7 +304,7 @@ const Logs = () => {
         const batchRuns = await batchService.getBatchRuns();
         for (const batch of batchRuns.slice(-10)) { // Latest 10 batch runs
           try {
-            const logContent = await batchService.getBatchLog(batch.run_id);
+            const logContent = await logService.getBatchLogs(batch.run_id);
             allLogs.push({
               id: batch.run_id,
               type: 'batch',
@@ -339,7 +340,7 @@ const Logs = () => {
 
       // Get topology logs
       try {
-        const topologyLogs = await statusService.getTopologyLogs();
+        const topologyLogs = await logService.getTopologyLogs();
         if (Array.isArray(topologyLogs)) {
           topologyLogs.forEach((log, index) => {
             allLogs.push({

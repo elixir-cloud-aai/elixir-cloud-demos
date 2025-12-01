@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { fetchDashboardData, testConnection } from '../services/api';
+import api, { fetchDashboardData, testConnection } from '../services/api';
 import { taskService } from '../services/taskService';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
@@ -197,10 +197,44 @@ const SubmitTask = () => {
   const loadTesInstances = async () => {
     try {
       setLoading(true);
-      const data = await fetchDashboardData();
-      setTesInstances(data.tes_instances || []);
-      // Don't auto-select the first instance, let user choose
+      // Try to load from both endpoints to get comprehensive instance list
+      const [dashboardData, instancesData, nodesData] = await Promise.allSettled([
+        fetchDashboardData(),
+        api.get('/instances'),
+        api.get('/nodes')
+      ]);
+      
+      let instances = [];
+      
+      // Add instances from dashboard data
+      if (dashboardData.status === 'fulfilled' && dashboardData.value?.tes_instances) {
+        instances = [...instances, ...dashboardData.value.tes_instances];
+      }
+      
+      // Add instances from /instances endpoint
+      if (instancesData.status === 'fulfilled' && Array.isArray(instancesData.value?.data)) {
+        instances = [...instances, ...instancesData.value.data];
+      }
+      
+      // Add instances from /nodes endpoint
+      if (nodesData.status === 'fulfilled' && nodesData.value?.data?.nodes) {
+        const nodes = nodesData.value.data.nodes.map(node => ({
+          name: node.name,
+          url: node.url
+        }));
+        instances = [...instances, ...nodes];
+      }
+      
+      // Remove duplicates by URL
+      const uniqueInstances = instances.filter((instance, index, self) => 
+        index === self.findIndex(i => i.url === instance.url)
+      );
+      
+      console.log('Loaded TES instances:', uniqueInstances);
+      setTesInstances(uniqueInstances);
+      
     } catch (err) {
+      console.error('Error loading TES instances:', err);
       setError(err);
     } finally {
       setLoading(false);

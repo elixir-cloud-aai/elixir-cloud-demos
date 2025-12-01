@@ -154,6 +154,49 @@ def get_tes_locations():
     """Get TES instance locations for map visualization"""
     return jsonify(tes_locations)
 
+@app.route('/api/service_info', methods=['GET'])
+def get_service_info():
+    """Get TES service info for a specific instance"""
+    try:
+        tes_url = request.args.get('tes_url')
+        if not tes_url:
+            return jsonify({'error': 'tes_url parameter is required'}), 400
+        
+        # Try to get real service info from the TES instance
+        try:
+            # Make a request to the TES instance service-info endpoint
+            service_info_url = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/service-info"
+            response = requests.get(service_info_url, timeout=10)
+            if response.status_code == 200:
+                return jsonify(response.json())
+        except Exception as e:
+            print(f"Failed to get real service info from {tes_url}: {e}")
+        
+        # Fallback: return mock service info
+        return jsonify({
+            "id": "tes-service",
+            "name": "Task Execution Service",
+            "type": {
+                "group": "org.ga4gh",
+                "artifact": "tes",
+                "version": "1.1.0"
+            },
+            "description": "TES service for task execution",
+            "organization": {
+                "name": "Elixir Cloud",
+                "url": "https://elixir-cloud.dcc.sib.swiss/"
+            },
+            "contactUrl": "mailto:cloud-service@elixir-europe.org",
+            "documentationUrl": "https://ga4gh.github.io/task-execution-schemas/",
+            "version": "1.1.0",
+            "createdAt": "2023-01-01T00:00:00Z",
+            "updatedAt": datetime.now().isoformat() + "Z",
+            "environment": "production"
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/network_topology', methods=['GET'])
 def get_network_topology():
     """Get comprehensive network topology data"""

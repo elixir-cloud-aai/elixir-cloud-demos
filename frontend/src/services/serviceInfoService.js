@@ -5,9 +5,24 @@ export const serviceInfoService = {
   // Get service info for a TES instance
   getServiceInfo: async (tesUrl) => {
     try {
-      // Use dashboard data to get TES instances info
-      const response = await apiClient.get('/api/dashboard_data');
-      const dashboardData = response.data;
+      // First try to get real service info from the backend API
+      try {
+        console.log('Fetching service info for:', tesUrl);
+        const response = await apiClient.get('/api/service_info', {
+          params: { tes_url: tesUrl }
+        });
+        
+        if (response.data) {
+          console.log('Got real service info:', response.data);
+          return response.data;
+        }
+      } catch (apiError) {
+        console.warn('Failed to get real service info, falling back to mock data:', apiError);
+      }
+      
+      // Fallback: Use dashboard data to get TES instances info
+      const dashboardResponse = await apiClient.get('/api/dashboard_data');
+      const dashboardData = dashboardResponse.data;
       
       // Find the TES instance info
       const tesInstances = dashboardData.tes_instances || [];
@@ -72,7 +87,7 @@ export const serviceInfoService = {
       
       return {
         environment: process.env.NODE_ENV || 'development',
-        apiUrl: process.env.REACT_APP_API_URL || '',
+        apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
         version: '1.0.0',
         buildDate: new Date().toISOString(),
         tesInstances: dashboardData.tes_instances?.length || 0,
