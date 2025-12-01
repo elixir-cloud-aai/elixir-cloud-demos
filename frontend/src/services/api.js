@@ -3,13 +3,17 @@ import axios from 'axios';
 // Determine API base URL based on environment
 const getApiBaseUrl = () => {
   // Check for custom API URL first
-  if (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim() !== '') {
+  if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
   
-  // For both development and production, use relative URLs
-  // The Express server will proxy /api/* requests to the backend
-  return '';
+  // TEMPORARY WORKAROUND: Use direct backend URL while proxy is broken
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
+  }
+  
+  // Development - use localhost
+  return 'http://localhost:8000';
 };
 
 // Create axios instance with default config
