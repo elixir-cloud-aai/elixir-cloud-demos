@@ -682,13 +682,17 @@ def get_task_details():
     
     return jsonify({'success': True, 'task': task})
 
-@app.route('/api/workflow_log/<run_id>', methods=['GET'])
+@app.route('/api/workflow_log/<path:run_id>', methods=['GET'])
 def get_workflow_log(run_id):
     """Get workflow execution log"""
+    # URL decode the run_id to handle special characters
+    from urllib.parse import unquote
+    decoded_run_id = unquote(run_id)
+    
     # Find workflow run
     workflow = None
     for w in workflow_runs:
-        if w['run_id'] == run_id:
+        if w['run_id'] == decoded_run_id:
             workflow = w
             break
     
@@ -711,13 +715,17 @@ Submitted: {workflow['submitted_at']}
     
     return jsonify({'success': True, 'log': log_content, 'workflow': workflow})
 
-@app.route('/api/batch_log/<run_id>', methods=['GET'])
+@app.route('/api/batch_log/<path:run_id>', methods=['GET'])
 def get_batch_log(run_id):
     """Get batch execution log"""
+    # URL decode the run_id to handle special characters
+    from urllib.parse import unquote
+    decoded_run_id = unquote(run_id)
+    
     # Find batch run
     batch = None
     for b in batch_runs:
-        if b['run_id'] == run_id:
+        if b['run_id'] == decoded_run_id:
             batch = b
             break
     

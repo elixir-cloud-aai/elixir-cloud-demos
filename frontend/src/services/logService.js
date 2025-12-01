@@ -17,7 +17,8 @@ export const logService = {
   // Get workflow logs  
   getWorkflowLogs: async (runId) => {
     try {
-      const response = await api.get(`/api/workflow_log/${runId}`);
+      const encodedRunId = encodeURIComponent(runId);
+      const response = await api.get(`/api/workflow_log/${encodedRunId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching workflow logs:', error);
@@ -28,7 +29,8 @@ export const logService = {
   // Get batch logs
   getBatchLogs: async (runId) => {
     try {
-      const response = await api.get(`/api/batch_log/${runId}`);
+      const encodedRunId = encodeURIComponent(runId);
+      const response = await api.get(`/api/batch_log/${encodedRunId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching batch logs:', error);
