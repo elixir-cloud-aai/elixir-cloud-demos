@@ -10,7 +10,7 @@ app.use(express.static(path.join(__dirname, 'build')));
 
 // Proxy API requests to backend
 app.use('/api', createProxyMiddleware({
-  target: 'http://tesdashboardanalytics-backend-service:8000',
+  target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000',
   changeOrigin: true,
   timeout: 10000,
   onError: (err, req, res) => {
