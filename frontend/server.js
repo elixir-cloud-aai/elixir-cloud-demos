@@ -10,12 +10,9 @@ app.use(express.static(path.join(__dirname, 'build')));
 
 // Proxy API requests to backend
 app.use('/api', createProxyMiddleware({
-  target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000/api',
+  target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000',
   changeOrigin: true,
   timeout: 10000,
-  pathRewrite: {
-    '^/api': '', // Remove /api prefix since target already includes /api
-  },
   onError: (err, req, res) => {
     console.error('Proxy error:', err);
     res.status(500).json({ error: 'Backend service unavailable' });
