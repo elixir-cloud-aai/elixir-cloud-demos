@@ -54,7 +54,7 @@ app.get('/debug', (req, res) => {
     indexExists,
     files,
     cwd: process.cwd(),
-    serverVersion: 'v2.0-fixed-proxy',
+    serverVersion: 'v3.0-manual-proxy-fallback',
     environment: {
       NODE_ENV: process.env.NODE_ENV,
       REACT_APP_API_URL: process.env.REACT_APP_API_URL,
@@ -111,48 +111,104 @@ app.get('/test-backend', async (req, res) => {
 console.log('🔧 Setting up API proxy middleware...');
 console.log('📦 http-proxy-middleware available:', !!createProxyMiddleware);
 
-const proxyOptions = {
-  target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000',
-  changeOrigin: true,
-  logLevel: 'debug',
-  pathRewrite: {
-    '^/api': '/api' // Keep /api prefix
-  },
-  onError: (err, req, res) => {
-    console.error('❌ Proxy error:', err.message);
-    console.error('Request URL:', req.url);
-    if (!res.headersSent) {
-      res.status(500).json({ 
-        error: 'Backend service unavailable',
-        details: err.message,
-        target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000'
-      });
-    }
-  },
-  onProxyReq: (proxyReq, req, res) => {
-    console.log(`📡 Proxying ${req.method} ${req.url} to backend`);
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    console.log(`📥 Backend responded ${proxyRes.statusCode} for ${req.method} ${req.url}`);
-  }
-};
+const backendHost = 'tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local';
+const backendPort = 8000;
 
-console.log('🎯 Proxy target:', proxyOptions.target);
-
+// Try http-proxy-middleware first, fall back to manual proxy
 try {
+  console.log('🎯 Attempting to use http-proxy-middleware...');
+  
+  const proxyOptions = {
+    target: `http://${backendHost}:${backendPort}`,
+    changeOrigin: true,
+    logLevel: 'debug',
+    pathRewrite: {
+      '^/api': '/api' // Keep /api prefix
+    },
+    onError: (err, req, res) => {
+      console.error('❌ Proxy middleware error:', err.message);
+      console.error('Request URL:', req.url);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'Backend service unavailable via middleware',
+          details: err.message,
+          target: `http://${backendHost}:${backendPort}`
+        });
+      }
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`📡 Middleware proxying ${req.method} ${req.url} to backend`);
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(`📥 Backend responded ${proxyRes.statusCode} for ${req.method} ${req.url}`);
+    }
+  };
+
   const proxy = createProxyMiddleware(proxyOptions);
   app.use('/api', proxy);
-  console.log('✅ API proxy middleware configured successfully');
-} catch (error) {
-  console.error('❌ Failed to create proxy middleware:', error);
-  // Fallback - create a simple proxy manually
+  console.log('✅ http-proxy-middleware configured successfully');
+  
+} catch (middlewareError) {
+  console.error('❌ http-proxy-middleware failed:', middlewareError.message);
+  console.log('🔄 Setting up manual proxy fallback...');
+  
+  // Manual proxy implementation using Node.js http module
   app.use('/api', (req, res) => {
-    res.status(502).json({
-      error: 'Proxy middleware failed to initialize',
-      details: error.message,
-      fallback: true
+    console.log(`📡 Manual proxy: ${req.method} ${req.url}`);
+    
+    const http = require('http');
+    const backendUrl = `http://${backendHost}:${backendPort}${req.url}`;
+    
+    console.log(`🎯 Proxying to: ${backendUrl}`);
+    
+    const options = {
+      hostname: backendHost,
+      port: backendPort,
+      path: req.url,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: `${backendHost}:${backendPort}`
+      }
+    };
+    
+    delete options.headers['host']; // Remove original host header
+    
+    const proxyReq = http.request(options, (proxyRes) => {
+      console.log(`📥 Manual proxy response: ${proxyRes.statusCode}`);
+      
+      // Copy response headers
+      Object.keys(proxyRes.headers).forEach(key => {
+        res.setHeader(key, proxyRes.headers[key]);
+      });
+      
+      // Set status code
+      res.status(proxyRes.statusCode);
+      
+      // Pipe response
+      proxyRes.pipe(res);
     });
+    
+    proxyReq.on('error', (err) => {
+      console.error('❌ Manual proxy error:', err.message);
+      if (!res.headersSent) {
+        res.status(502).json({
+          error: 'Backend connection failed (manual proxy)',
+          details: err.message,
+          backendUrl
+        });
+      }
+    });
+    
+    // Forward request body if present
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      req.pipe(proxyReq);
+    } else {
+      proxyReq.end();
+    }
   });
+  
+  console.log('✅ Manual proxy fallback configured');
 }
 
 // Serve static files from build directory
