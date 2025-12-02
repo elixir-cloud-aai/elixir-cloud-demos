@@ -171,8 +171,24 @@ const TaskDetails = () => {
   const taskId = searchParams.get('task_id');
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('Fetching task details for:', { tesUrl, taskId });
+        const data = await taskService.getTaskDetails(tesUrl, taskId);
+        console.log('Received task details:', data);
+        setTaskDetails(data);
+      } catch (err) {
+        console.error('Error in fetchTaskDetails:', err);
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (tesUrl && taskId) {
-      fetchTaskDetails();
+      fetchData();
     }
   }, [tesUrl, taskId]);
 
@@ -180,9 +196,12 @@ const TaskDetails = () => {
     try {
       setLoading(true);
       setError(null);
+      console.log('Refreshing task details for:', { tesUrl, taskId });
       const data = await taskService.getTaskDetails(tesUrl, taskId);
+      console.log('Received task details:', data);
       setTaskDetails(data);
     } catch (err) {
+      console.error('Error in fetchTaskDetails:', err);
       setError(err);
     } finally {
       setLoading(false);
@@ -249,7 +268,9 @@ const TaskDetails = () => {
             View Logs
           </ActionButton>
           
-          {taskDetails?.task_json?.state === 'RUNNING' && (
+          {((taskDetails?.task_json?.state === 'RUNNING') || 
+            (taskDetails?.task?.status === 'RUNNING') ||
+            (taskDetails?.task?.status === 'QUEUED')) && (
             <ActionButton 
               variant="danger" 
               onClick={handleCancel}
@@ -269,17 +290,17 @@ const TaskDetails = () => {
             <CardTitle>Basic Information</CardTitle>
             <InfoRow>
               <InfoLabel>Task ID:</InfoLabel>
-              <InfoValue>{taskDetails.task_json?.id || 'N/A'}</InfoValue>
+              <InfoValue>{(taskDetails.task_json?.id || taskDetails.task?.task_id || taskDetails.task?.id) || 'N/A'}</InfoValue>
             </InfoRow>
             <InfoRow>
               <InfoLabel>Name:</InfoLabel>
-              <InfoValue>{taskDetails.task_json?.name || 'Unnamed Task'}</InfoValue>
+              <InfoValue>{(taskDetails.task_json?.name || taskDetails.task?.task_name || taskDetails.task?.name) || 'Unnamed Task'}</InfoValue>
             </InfoRow>
             <InfoRow>
               <InfoLabel>Status:</InfoLabel>
               <InfoValue>
-                <TaskStatus status={taskDetails.task_json?.state}>
-                  {formatTaskStatus(taskDetails.task_json?.state)}
+                <TaskStatus status={taskDetails.task_json?.state || taskDetails.task?.status || taskDetails.task?.state}>
+                  {formatTaskStatus(taskDetails.task_json?.state || taskDetails.task?.status || taskDetails.task?.state)}
                 </TaskStatus>
               </InfoValue>
             </InfoRow>
@@ -289,7 +310,7 @@ const TaskDetails = () => {
             </InfoRow>
             <InfoRow>
               <InfoLabel>Description:</InfoLabel>
-              <InfoValue>{taskDetails.task_json?.description || 'No description'}</InfoValue>
+              <InfoValue>{(taskDetails.task_json?.description || taskDetails.task?.description) || 'No description'}</InfoValue>
             </InfoRow>
           </ContentCard>
 
@@ -298,58 +319,86 @@ const TaskDetails = () => {
             <CardTitle>Timing</CardTitle>
             <InfoRow>
               <InfoLabel>Created:</InfoLabel>
-              <InfoValue>{formatDate(taskDetails.task_json?.creation_time)}</InfoValue>
+              <InfoValue>{formatDate(taskDetails.task_json?.creation_time || taskDetails.task?.submitted_at || taskDetails.task?.creation_time)}</InfoValue>
             </InfoRow>
             <InfoRow>
               <InfoLabel>Started:</InfoLabel>
-              <InfoValue>{formatDate(taskDetails.task_json?.start_time)}</InfoValue>
+              <InfoValue>{formatDate(taskDetails.task_json?.start_time || taskDetails.task?.start_time)}</InfoValue>
             </InfoRow>
             <InfoRow>
               <InfoLabel>Ended:</InfoLabel>
-              <InfoValue>{formatDate(taskDetails.task_json?.end_time)}</InfoValue>
+              <InfoValue>{formatDate(taskDetails.task_json?.end_time || taskDetails.task?.end_time)}</InfoValue>
             </InfoRow>
           </ContentCard>
 
           {/* Resources */}
-          {taskDetails.task_json?.resources && (
+          {(taskDetails.task_json?.resources || taskDetails.task?.resources) && (
             <ContentCard>
               <CardTitle>Resources</CardTitle>
               <InfoRow>
                 <InfoLabel>CPU Cores:</InfoLabel>
-                <InfoValue>{taskDetails.task_json.resources.cpu_cores || 'N/A'}</InfoValue>
+                <InfoValue>{(taskDetails.task_json?.resources?.cpu_cores || taskDetails.task?.resources?.cpu_cores) || 'N/A'}</InfoValue>
               </InfoRow>
               <InfoRow>
                 <InfoLabel>RAM (GB):</InfoLabel>
-                <InfoValue>{taskDetails.task_json.resources.ram_gb || 'N/A'}</InfoValue>
+                <InfoValue>{(taskDetails.task_json?.resources?.ram_gb || taskDetails.task?.resources?.ram_gb) || 'N/A'}</InfoValue>
               </InfoRow>
               <InfoRow>
                 <InfoLabel>Disk (GB):</InfoLabel>
-                <InfoValue>{taskDetails.task_json.resources.disk_gb || 'N/A'}</InfoValue>
+                <InfoValue>{(taskDetails.task_json?.resources?.disk_gb || taskDetails.task?.resources?.disk_gb) || 'N/A'}</InfoValue>
               </InfoRow>
               <InfoRow>
                 <InfoLabel>Preemptible:</InfoLabel>
-                <InfoValue>{taskDetails.task_json.resources.preemptible ? 'Yes' : 'No'}</InfoValue>
+                <InfoValue>{(taskDetails.task_json?.resources?.preemptible || taskDetails.task?.resources?.preemptible) ? 'Yes' : 'No'}</InfoValue>
               </InfoRow>
             </ContentCard>
           )}
 
           {/* Executors */}
-          {taskDetails.task_json?.executors && taskDetails.task_json.executors.length > 0 && (
+          {((taskDetails.task_json?.executors && taskDetails.task_json.executors.length > 0) || 
+            (taskDetails.task?.executors && taskDetails.task.executors.length > 0)) && (
             <ContentCard>
               <CardTitle>Executors</CardTitle>
-              {taskDetails.task_json.executors.map((executor, index) => (
+              {(taskDetails.task_json?.executors || taskDetails.task?.executors || []).map((executor, index) => (
                 <div key={index}>
                   <InfoRow>
                     <InfoLabel>Image:</InfoLabel>
-                    <InfoValue>{executor.image}</InfoValue>
+                    <InfoValue>{executor.image || 'N/A'}</InfoValue>
                   </InfoRow>
                   <InfoRow>
                     <InfoLabel>Command:</InfoLabel>
                     <InfoValue>{executor.command?.join(' ') || 'N/A'}</InfoValue>
                   </InfoRow>
-                  {index < taskDetails.task_json.executors.length - 1 && <hr />}
+                  {index < ((taskDetails.task_json?.executors || taskDetails.task?.executors || []).length - 1) && <hr />}
                 </div>
               ))}
+            </ContentCard>
+          )}
+
+          {/* Additional Information for Dashboard Tasks */}
+          {taskDetails.task && !taskDetails.task_json && (
+            <ContentCard>
+              <CardTitle>Additional Information</CardTitle>
+              <InfoRow>
+                <InfoLabel>TES Instance:</InfoLabel>
+                <InfoValue>{taskDetails.task.tes_name || 'Unknown'}</InfoValue>
+              </InfoRow>
+              <InfoRow>
+                <InfoLabel>Task Type:</InfoLabel>
+                <InfoValue>{taskDetails.task.type || 'Unknown'}</InfoValue>
+              </InfoRow>
+              {taskDetails.task.input_url && (
+                <InfoRow>
+                  <InfoLabel>Input URL:</InfoLabel>
+                  <InfoValue>{taskDetails.task.input_url}</InfoValue>
+                </InfoRow>
+              )}
+              {taskDetails.task.output_url && (
+                <InfoRow>
+                  <InfoLabel>Output URL:</InfoLabel>
+                  <InfoValue>{taskDetails.task.output_url}</InfoValue>
+                </InfoRow>
+              )}
             </ContentCard>
           )}
 
@@ -357,9 +406,10 @@ const TaskDetails = () => {
           <LogsSection>
             <ContentCard>
               <CardTitle>Logs Preview</CardTitle>
-              {taskDetails.task_json?.logs && taskDetails.task_json.logs.length > 0 ? (
+              {((taskDetails.task_json?.logs && taskDetails.task_json.logs.length > 0) ||
+                (taskDetails.task?.logs && taskDetails.task.logs.length > 0)) ? (
                 <LogsContainer>
-                  {taskDetails.task_json.logs.map((log, index) => (
+                  {(taskDetails.task_json?.logs || taskDetails.task?.logs || []).map((log, index) => (
                     <div key={index}>
                       {log.stdout && `STDOUT:\n${log.stdout}\n\n`}
                       {log.stderr && `STDERR:\n${log.stderr}\n\n`}
@@ -368,7 +418,13 @@ const TaskDetails = () => {
                 </LogsContainer>
               ) : (
                 <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                  No logs available
+                  No logs available for this task
+                  {taskDetails.task && !taskDetails.task_json && (
+                    <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.7 }}>
+                      Note: This task was submitted through the dashboard. 
+                      Full TES logs may be available directly from the TES instance.
+                    </div>
+                  )}
                 </div>
               )}
             </ContentCard>
