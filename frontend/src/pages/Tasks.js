@@ -205,7 +205,7 @@ const Tasks = () => {
 
   // Handle viewing task logs
   const handleViewLogs = (taskId) => {
-    navigate(`/task-logs/${taskId}`);
+    navigate(`/logs?type=task&taskId=${taskId}`);
   };
 
   // Filter tasks based on search term

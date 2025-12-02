@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { FileText, Download, RefreshCw, Search, Filter, Calendar } from 'lucide-react';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -207,6 +208,7 @@ const NoLogsMessage = styled.div`
 `;
 
 const Logs = () => {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [logs, setLogs] = useState([]);
@@ -214,6 +216,20 @@ const Logs = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [logType, setLogType] = useState('all');
   const [expandedLogs, setExpandedLogs] = useState(new Set());
+
+  // Check URL parameters for pre-selection
+  useEffect(() => {
+    const typeParam = searchParams.get('type');
+    const taskIdParam = searchParams.get('taskId');
+    
+    if (typeParam === 'task') {
+      setLogType('task');
+    }
+    
+    if (taskIdParam) {
+      setSearchTerm(taskIdParam);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadLogs();

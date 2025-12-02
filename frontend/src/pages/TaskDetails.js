@@ -223,7 +223,7 @@ const TaskDetails = () => {
   };
 
   const handleViewLogs = () => {
-    navigate(`/task-logs/${taskId}`);
+    navigate(`/logs?type=task&taskId=${taskId}`);
   };
 
   if (loading) {
