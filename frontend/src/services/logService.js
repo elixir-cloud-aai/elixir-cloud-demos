@@ -2,10 +2,10 @@ import api from './api';
 
 // Log service for fetching various types of logs
 export const logService = {
-  // Get task logs
+  // Get task logs (for individual tasks)
   getTaskLogs: async (taskId) => {
     try {
-      const response = await api.get(`/api/batch_log/${taskId}`);
+      const response = await api.get(`/api/task_log/${taskId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching task logs:', error);

@@ -55,7 +55,7 @@ export const statusService = {
   // Get task logs  
   getTaskLogs: async (taskId) => {
     try {
-      const response = await apiClient.get(`/api/batch_log/${taskId}`);
+      const response = await apiClient.get(`/api/task_log/${taskId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching task logs:', error);

@@ -796,6 +796,49 @@ Submitted: {batch['submitted_at']}
     
     return jsonify({'success': True, 'log': log_content, 'batch': batch})
 
+@app.route('/api/task_log/<path:task_id>', methods=['GET'])
+def get_task_log(task_id):
+    """Get individual task execution log"""
+    # URL decode the task_id to handle special characters
+    from urllib.parse import unquote
+    decoded_task_id = unquote(task_id)
+    
+    # Find task in submitted_tasks
+    task = None
+    for t in submitted_tasks:
+        if t['task_id'] == decoded_task_id:
+            task = t
+            break
+    
+    if not task:
+        return jsonify({'success': False, 'error': 'Task not found'}), 404
+    
+    # Mock log content for individual task
+    log_content = f"""
+=== Task Execution Log ===
+Task ID: {task_id}
+Task Name: {task.get('task_name', 'Unknown')}
+TES Instance: {task.get('tes_name', 'Unknown')}
+Status: {task.get('status', 'Unknown')}
+Submitted: {task.get('submitted_at', 'Unknown')}
+
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Task execution started
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Initializing execution environment
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloading input files
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Executing command: {task.get('command', 'echo "Hello World"')}
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Command output: Hello World from TES!
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Uploading output files
+[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Task execution completed successfully
+
+=== Task Details ===
+Executors: {len(task.get('executors', []))}
+Resources: CPU={task.get('cpu', 'N/A')}, Memory={task.get('memory', 'N/A')}
+Inputs: {len(task.get('inputs', []))} files
+Outputs: {len(task.get('outputs', []))} files
+"""
+    
+    return jsonify({'success': True, 'log': log_content, 'task': task})
+
 @app.route('/api/topology_logs', methods=['GET'])
 def get_topology_logs():
     """Get logs for topology visualization"""
