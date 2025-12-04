@@ -259,11 +259,12 @@ const LogModal = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
 `;
 
 const LogContent = styled.div`
@@ -276,6 +277,10 @@ const LogContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e5e7eb;
+  position: relative;
+  z-index: 10000;
 `;
 
 const LogHeader = styled.div`
@@ -411,15 +416,19 @@ const BatchProcessing = () => {
 
   const handleViewLogs = async (runId) => {
     try {
+      console.log('Opening batch logs modal for run:', runId);
       setLogLoading(true);
       setCurrentLogRunId(runId);
+      setCurrentLog(''); // Clear previous logs
       setShowLogModal(true);
       
+      console.log('Fetching batch logs...');
       const logs = await batchService.getBatchLog(runId);
-      setCurrentLog(logs);
+      console.log('Received batch logs:', logs);
+      setCurrentLog(logs || 'No logs available for this batch run');
     } catch (err) {
-      console.error('Error loading logs:', err);
-      setCurrentLog(`Error loading logs: ${err.message}`);
+      console.error('Error loading batch logs:', err);
+      setCurrentLog(`Error loading logs: ${err.message}\n\nThis might be because:\n- The backend pod doesn't have the latest code\n- The batch logs endpoint is not working\n- Network connectivity issues`);
     } finally {
       setLogLoading(false);
     }
@@ -795,7 +804,7 @@ const BatchProcessing = () => {
               <CloseButton onClick={closeLogModal}>×</CloseButton>
             </LogHeader>
             <LogTextArea>
-              {logLoading ? 'Loading logs...' : currentLog || 'No logs available'}
+              {logLoading ? 'Loading logs...' : (currentLog || 'No logs available for this batch run')}
             </LogTextArea>
           </LogContent>
         </LogModal>
