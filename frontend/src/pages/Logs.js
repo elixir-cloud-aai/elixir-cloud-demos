@@ -298,23 +298,32 @@ const Logs = () => {
         // Load all recent logs (existing behavior)
         const dashboardData = await taskService.getDashboardData();
 
+        console.log('Dashboard data for logs:', dashboardData);
+        console.log('Submitted tasks found:', dashboardData.submitted_tasks?.length || 0);
+
         // Add task logs
         if (Array.isArray(dashboardData.submitted_tasks)) {
           for (const task of dashboardData.submitted_tasks.slice(-10)) { // Latest 10 tasks
             try {
+              console.log('Loading log for task:', task.task_id, 'from:', task.tes_name);
               const logResponse = await logService.getTaskLogs(task.task_id);
               let content = 'No log content available';
               
+              console.log('Task log response:', logResponse);
+              
               if (logResponse && logResponse.success) {
-                content = logResponse.log;
+                content = logResponse.log || 'Log endpoint returned success but no log content';
               } else if (logResponse && logResponse.message) {
                 content = logResponse.message;
+              } else {
+                // Fallback: create a basic log entry even if backend endpoint isn't working
+                content = `Task Log for ${task.task_id}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: Full log details not available (backend may still be updating)`;
               }
               
               allLogs.push({
                 id: task.task_id,
                 type: 'task',
-                title: `Task ${task.task_id}`,
+                title: `Task ${task.task_id} (${task.tes_name})`,
                 content: content,
                 timestamp: task.submitted_at || new Date().toISOString(),
                 metadata: {
@@ -323,11 +332,13 @@ const Logs = () => {
                 }
               });
             } catch (err) {
+              console.error('Error loading task log for', task.task_id, ':', err);
+              // Still add the task to the logs list with error info and basic task details
               allLogs.push({
                 id: task.task_id,
                 type: 'task',
-                title: `Task ${task.task_id}`,
-                content: `Failed to load log: ${err.message}`,
+                title: `Task ${task.task_id} (${task.tes_name})`,
+                content: `Task Log for ${task.task_id}\n\nError: ${err.message}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: This task exists but logs couldn't be fetched from the backend.`,
                 timestamp: task.submitted_at || new Date().toISOString(),
                 metadata: {
                   status: task.status,
@@ -559,7 +570,10 @@ const Logs = () => {
               
               {expandedLogs.has(log.id) && (
                 <LogContent>
-                  {log.content || 'No log content available'}
+                  {typeof log.content === 'string' ? 
+                    log.content : 
+                    JSON.stringify(log.content, null, 2) || 'No log content available'
+                  }
                 </LogContent>
               )}
             </LogEntry>
