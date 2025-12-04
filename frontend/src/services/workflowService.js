@@ -30,7 +30,14 @@ export const workflowService = {
   getWorkflowLogs: async (runId) => {
     try {
       const response = await api.get(`/api/workflow_log/${runId}`);
-      return response.data;
+      // Extract just the log content from the response
+      if (response.data && response.data.success && response.data.log) {
+        return response.data.log;
+      } else if (response.data && response.data.log) {
+        return response.data.log;
+      } else {
+        return 'No log content available';
+      }
     } catch (error) {
       console.error('Error fetching workflow logs:', error);
       throw error;
