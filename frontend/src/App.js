@@ -18,6 +18,7 @@ import NodeManagement from './pages/NodeManagement';
 import Utilities from './pages/Utilities';
 import InstanceManagement from './pages/InstanceManagement';
 import ApiTest from './pages/ApiTest';
+import MiddlewareManager from './pages/MiddlewareManager';
 import Settings from './pages/Settings';
 import { testConnection } from './services/api';
 
@@ -80,6 +81,7 @@ function App() {
                 <Route path="/utilities" element={<Utilities />} />
                 <Route path="/instances" element={<InstanceManagement />} />
                 <Route path="/api-test" element={<ApiTest />} />
+                <Route path="/middleware" element={<MiddlewareManager />} />
                 <Route path="/nodes" element={
                   <ProtectedRoute>
                     <NodeManagement />

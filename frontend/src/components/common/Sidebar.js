@@ -12,7 +12,8 @@ import {
   FileText,
   BarChart3,
   Network,
-  Wrench
+  Wrench,
+  Shield
 } from 'lucide-react';
 
 const SidebarContainer = styled.nav`
@@ -129,6 +130,11 @@ const Sidebar = () => {
         <NavItem to="/api-test" $isActive={isActive('/api-test')}>
           <NavIcon><Activity size={18} /></NavIcon>
           <NavText>API Test</NavText>
+        </NavItem>
+        
+        <NavItem to="/middleware" $isActive={isActive('/middleware')}>
+          <NavIcon><Shield size={18} /></NavIcon>
+          <NavText>Middleware Manager</NavText>
         </NavItem>
       </NavSection>
 

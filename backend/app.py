@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory, flash, send_file, session
+from flask import Flask, request, jsonify, send_from_directory, flash, send_file, session, g
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pathlib import Path
@@ -9,6 +9,18 @@ import uuid
 import json
 import time
 from datetime import datetime
+import asyncio
+import functools
+
+# Import middleware system
+try:
+    from middleware_manager import MiddlewareManager, MiddlewareContext
+    from middleware_config import setup_default_middleware, create_test_manager
+    from middleware_implementations import MonitoringMiddleware, CachingMiddleware
+    MIDDLEWARE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Middleware system not available: {e}")
+    MIDDLEWARE_AVAILABLE = False
 
 # Load environment variables
 env_file_path = Path(__file__).parent / '.env'
@@ -95,6 +107,19 @@ app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SESSION_TYPE'] = 'filesystem'
 
+# Initialize Middleware System
+middleware_manager = None
+if MIDDLEWARE_AVAILABLE:
+    try:
+        middleware_manager = create_test_manager()
+        print("✅ Middleware system initialized successfully")
+        print(f"📊 Registered {len(middleware_manager.middlewares)} middleware components")
+    except Exception as e:
+        print(f"❌ Failed to initialize middleware system: {e}")
+        MIDDLEWARE_AVAILABLE = False
+else:
+    print("⚠️ Running without middleware system")
+
 BATCH_RUNS_FILE = os.path.join(app.config['UPLOAD_FOLDER'], 'batch_runs.json')
 
 # Load TES instance locations for map visualization
@@ -123,6 +148,143 @@ save_batch_runs(batch_runs)
 # Global variables for workflow status
 current_workflow_step = 0
 latest_workflow_path = []
+
+# Middleware processing functions
+def run_async_middleware(coro):
+    """Helper function to run async middleware in sync context"""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If loop is already running, create a new task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result()
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No loop running, create new one
+        return asyncio.run(coro)
+
+def create_middleware_context() -> MiddlewareContext:
+    """Create middleware context from Flask request"""
+    if not MIDDLEWARE_AVAILABLE:
+        return None
+    
+    # Extract request information
+    request_data = {
+        'endpoint': request.endpoint or request.path,
+        'method': request.method,
+        'headers': dict(request.headers),
+        'query_params': dict(request.args),
+        'client_ip': request.remote_addr,
+        'body': {}
+    }
+    
+    # Add request body if present
+    if request.is_json:
+        try:
+            request_data['body'] = request.get_json() or {}
+        except:
+            request_data['body'] = {}
+    elif request.form:
+        request_data['body'] = dict(request.form)
+    
+    return MiddlewareContext(request_data)
+
+def process_middleware_request():
+    """Process request through middleware chain"""
+    if not MIDDLEWARE_AVAILABLE or not middleware_manager:
+        return True, None  # Allow request to proceed
+    
+    context = create_middleware_context()
+    if not context:
+        return True, None
+    
+    try:
+        # Execute middleware chain
+        results = run_async_middleware(middleware_manager.execute_chain(context))
+        
+        # Store context in Flask g for use in response processing
+        g.middleware_context = context
+        g.middleware_results = results
+        
+        # Check if any middleware failed and should block the request
+        for result in results:
+            if result.status.value in ['failed'] and result.middleware_name in ['authentication', 'authorization']:
+                error_response = jsonify({
+                    'error': 'Middleware blocked request',
+                    'middleware': result.middleware_name,
+                    'message': result.message,
+                    'timestamp': datetime.now().isoformat()
+                })
+                error_response.status_code = 401 if result.middleware_name == 'authentication' else 403
+                return False, error_response
+        
+        # Check for cached response
+        if hasattr(context, 'cached_response') and context.cached_response:
+            cached_response = jsonify(context.cached_response)
+            cached_response.headers['X-Cache'] = 'HIT'
+            return False, cached_response
+        
+        return True, None
+        
+    except Exception as e:
+        print(f"❌ Middleware processing error: {e}")
+        return True, None  # Allow request to proceed on middleware error
+
+def process_middleware_response(response):
+    """Process response through middleware (for caching, monitoring, etc.)"""
+    if not MIDDLEWARE_AVAILABLE or not hasattr(g, 'middleware_context'):
+        return response
+    
+    try:
+        context = g.middleware_context
+        
+        # Handle caching
+        if hasattr(context, 'should_cache') and context.should_cache and hasattr(context, 'cache_key'):
+            # Find caching middleware and cache the response
+            for middleware in middleware_manager.middlewares.values():
+                if hasattr(middleware, 'cache_response'):
+                    middleware.cache_response(context.cache_key, response.get_json())
+                    break
+        
+        # Handle monitoring
+        status_code = response.status_code
+        for middleware in middleware_manager.middlewares.values():
+            if hasattr(middleware, 'record_response_metrics'):
+                middleware.record_response_metrics(context.__dict__, status_code)
+        
+        # Add middleware info to response headers
+        response.headers['X-Middleware-Processed'] = 'true'
+        response.headers['X-Middleware-Count'] = str(len(g.middleware_results))
+        
+        # Add execution time
+        total_time = context.get_execution_time()
+        response.headers['X-Middleware-Time'] = f"{total_time:.2f}ms"
+        
+    except Exception as e:
+        print(f"❌ Middleware response processing error: {e}")
+    
+    return response
+
+# Flask before_request hook
+@app.before_request
+def before_request():
+    """Process request through middleware before handling"""
+    # Skip middleware for middleware management endpoints to avoid recursion
+    if request.path.startswith('/api/middleware'):
+        return None
+    
+    should_proceed, response = process_middleware_request()
+    if not should_proceed:
+        return response
+
+# Flask after_request hook  
+@app.after_request
+def after_request(response):
+    """Process response through middleware after handling"""
+    return process_middleware_response(response)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -1583,6 +1745,182 @@ def index():
             'tes_instances': TES_INSTANCES  # For compatibility with different frontend calls
         }
     })
+
+# Middleware Management API Endpoints
+@app.route('/api/middleware/status', methods=['GET'])
+def get_middleware_status():
+    """Get status of all middlewares"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        status = {}
+        for name, middleware in middleware_manager.middlewares.items():
+            status[name] = {
+                "name": name,
+                "enabled": middleware.enabled,
+                "priority": middleware.priority,
+                "type": type(middleware).__name__,
+                "description": getattr(middleware, 'description', ''),
+                "metrics": getattr(middleware, 'metrics', {})
+            }
+        
+        return jsonify({
+            "status": "success",
+            "middlewares": status,
+            "total_count": len(middleware_manager.middlewares),
+            "enabled_count": len([m for m in middleware_manager.middlewares.values() if m.enabled])
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to get middleware status: {str(e)}"}), 500
+
+@app.route('/api/middleware/<middleware_name>/toggle', methods=['POST'])
+def toggle_middleware(middleware_name):
+    """Enable/disable a specific middleware"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        if middleware_name not in middleware_manager.middlewares:
+            return jsonify({"error": f"Middleware '{middleware_name}' not found"}), 404
+        
+        middleware = middleware_manager.middlewares[middleware_name]
+        middleware.enabled = not middleware.enabled
+        
+        return jsonify({
+            "status": "success",
+            "middleware": middleware_name,
+            "enabled": middleware.enabled
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to toggle middleware: {str(e)}"}), 500
+
+@app.route('/api/middleware/<middleware_name>/config', methods=['GET', 'PUT'])
+def middleware_config(middleware_name):
+    """Get or update middleware configuration"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        if middleware_name not in middleware_manager.middlewares:
+            return jsonify({"error": f"Middleware '{middleware_name}' not found"}), 404
+        
+        middleware = middleware_manager.middlewares[middleware_name]
+        
+        if request.method == 'GET':
+            config = getattr(middleware, 'config', {})
+            return jsonify({
+                "status": "success",
+                "middleware": middleware_name,
+                "config": config
+            })
+        
+        elif request.method == 'PUT':
+            new_config = request.get_json()
+            if hasattr(middleware, 'update_config'):
+                middleware.update_config(new_config)
+                return jsonify({
+                    "status": "success",
+                    "middleware": middleware_name,
+                    "message": "Configuration updated"
+                })
+            else:
+                return jsonify({"error": "Middleware does not support configuration updates"}), 400
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to handle middleware config: {str(e)}"}), 500
+
+@app.route('/api/middleware/metrics', methods=['GET'])
+def get_middleware_metrics():
+    """Get aggregated metrics from all middlewares"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        metrics = {}
+        for name, middleware in middleware_manager.middlewares.items():
+            if hasattr(middleware, 'get_metrics'):
+                middleware_metrics = middleware.get_metrics()
+                metrics[name] = middleware_metrics
+            elif hasattr(middleware, 'metrics'):
+                metrics[name] = middleware.metrics
+        
+        return jsonify({
+            "status": "success",
+            "metrics": metrics,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to get middleware metrics: {str(e)}"}), 500
+
+@app.route('/api/middleware/test', methods=['POST'])
+def test_middleware_chain():
+    """Test the middleware chain with a sample request"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        test_data = request.get_json() or {}
+        
+        # Create a test context
+        context = MiddlewareContext(
+            user_id=test_data.get('user_id', 'test_user'),
+            endpoint=test_data.get('endpoint', '/api/test'),
+            method=test_data.get('method', 'GET'),
+            headers=test_data.get('headers', {}),
+            data=test_data.get('data', {})
+        )
+        
+        # Process through middleware chain
+        should_continue, response = asyncio.run(
+            middleware_manager.process_request(context)
+        )
+        
+        if not should_continue:
+            return jsonify({
+                "status": "blocked",
+                "message": "Request blocked by middleware",
+                "response": response,
+                "context": {
+                    "user_id": context.user_id,
+                    "endpoint": context.endpoint,
+                    "method": context.method
+                }
+            })
+        
+        return jsonify({
+            "status": "success",
+            "message": "Request passed through middleware chain",
+            "context": {
+                "user_id": context.user_id,
+                "endpoint": context.endpoint,
+                "method": context.method,
+                "processed_middlewares": len(middleware_manager.middlewares)
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to test middleware chain: {str(e)}"}), 500
+
+@app.route('/api/middleware/reset', methods=['POST'])
+def reset_middleware():
+    """Reset all middleware configurations and metrics"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        for middleware in middleware_manager.middlewares.values():
+            if hasattr(middleware, 'reset'):
+                middleware.reset()
+            elif hasattr(middleware, 'metrics'):
+                middleware.metrics = {}
+        
+        return jsonify({
+            "status": "success",
+            "message": "All middleware configurations and metrics reset"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to reset middleware: {str(e)}"}), 500
 
 if __name__ == '__main__':
     print("🚀 Starting TES Dashboard Backend...")
