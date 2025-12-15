@@ -103,7 +103,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 CORS(app, 
-     origins=['http://localhost:3000', 'http://127.0.0.1:3000'], 
+     origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5001', 'http://127.0.0.1:5001', 
+              'https://tes-dashboard-frontend-route-federated-analytics-showcase.2.rahtiapp.fi'], 
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
@@ -2440,3 +2441,22 @@ class {middleware_name.replace(' ', '')}Middleware(BaseMiddleware):
     
     except Exception as e:
         return jsonify({"error": f"Failed to get middleware source: {str(e)}"}), 500
+
+if __name__ == '__main__':
+    # Determine port based on environment
+    port = int(os.getenv('PORT', '5001'))  # Default to 5001 for local dev, 8000 for production
+    debug_mode = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
+    
+    # Start the Flask development server
+    print("🚀 Starting TES Dashboard Backend Server...")
+    print(f"💻 Server will be available at http://localhost:{port}")
+    print(f"🔗 Frontend should connect to http://localhost:{port}")
+    print("📊 Middleware system status:", "enabled" if MIDDLEWARE_AVAILABLE else "disabled")
+    print(f"🔧 Environment: {'development' if debug_mode else 'production'}")
+    
+    app.run(
+        host='0.0.0.0',  # Allow connections from any IP
+        port=port,
+        debug=debug_mode,
+        use_reloader=False  # Disable auto-reloader to prevent issues with middleware
+    )

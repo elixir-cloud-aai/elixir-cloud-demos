@@ -12,8 +12,8 @@ const getApiBaseUrl = () => {
     return 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
   }
   
-  // Development - use localhost
-  return 'http://localhost:8000';
+  // Development - use localhost (backend running on port 5001)
+  return 'http://localhost:5001';
 };
 
 // Create axios instance with default config
