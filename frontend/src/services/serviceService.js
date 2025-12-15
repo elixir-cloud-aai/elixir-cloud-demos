@@ -40,7 +40,7 @@ export const serviceService = {
       // Return debug environment info
       return {
         environment: process.env.NODE_ENV || 'development',
-        apiUrl: process.env.REACT_APP_API_URL || '',
+        apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
         version: '1.0.0',
         buildDate: new Date().toISOString(),
         browserInfo: {

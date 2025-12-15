@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import api from '../services/api';
 import { 
-  Wifi, Server, Clock, AlertCircle, CheckCircle, Shield, 
+  Wifi, Globe, Server, Clock, AlertCircle, CheckCircle, Shield, 
   Plus, Trash2, ArrowUp, ArrowDown, Github, Settings, 
   Play, Pause, RotateCcw, Eye, Code, ExternalLink, BarChart3
 } from 'lucide-react';
@@ -663,7 +663,7 @@ const Utilities = () => {
           response.data.tesInstances.map(async (instance) => {
             try {
               const startTime = Date.now();
-              const healthResponse = await fetch(`${instance.url}/ga4gh/tes/v1/service-info`, {
+              const healthResponse = await fetch(`${instance.url}/service-info`, {
                 method: 'GET',
                 headers: {
                   'Accept': 'application/json',

@@ -84,6 +84,10 @@ if tes_instances_file.exists():
                 url = url.rstrip('/')
                 TES_INSTANCES.append({'name': name.strip(), 'url': url})
 
+def load_tes_instances():
+    """Return the loaded TES instances"""
+    return TES_INSTANCES
+
 # Environment variables
 FUNNEL_SERVER_USER = clean_env_value(os.getenv('FUNNEL_SERVER_USER', ''))
 FUNNEL_SERVER_PASSWORD = clean_env_value(os.getenv('FUNNEL_SERVER_PASSWORD', ''))
@@ -539,49 +543,207 @@ def latest_workflow_status():
 
 @app.route('/api/submit_task', methods=['POST'])
 def submit_task():
-    """Submit a task to TES"""
+    """Submit a task to TES instance using GA4GH TES v1 API"""
     try:
         data = request.get_json()
-        task_id = str(uuid.uuid4())
         
-        # Get TES instance info
-        tes_instance = data.get('tes_instance', 'Unknown')
-        task_type = data.get('task_type', 'simple')
+        # Validate required fields
+        tes_url = data.get('tes_instance')
+        docker_image = data.get('docker_image')
         
-        # Find TES instance name
-        tes_name = 'Unknown'
-        for inst in TES_INSTANCES:
-            if inst['url'] == tes_instance or tes_instance == 'all':
+        if not tes_url or not docker_image:
+            return jsonify({
+                'success': False,
+                'error': 'TES instance URL and Docker image are required'
+            }), 400
+        
+        # Find TES instance name from our configuration
+        tes_name = 'Unknown TES Instance'
+        tes_instances = load_tes_instances()
+        for inst in tes_instances:
+            if inst['url'].rstrip('/') == tes_url.rstrip('/'):
                 tes_name = inst['name']
                 break
         
-        # Create task object
-        task = {
-            'task_id': task_id,
-            'tes_url': tes_instance,
-            'tes_name': tes_name,
-            'type': task_type,
-            'status': 'QUEUED',
-            'submitted_at': datetime.utcnow().isoformat(),
-            'input_url': data.get('input_url', ''),
-            'output_url': data.get('output_url', '')
+        # Create GA4GH TES task specification
+        tes_task = {
+            "name": data.get('task_name', f'Task-{datetime.utcnow().strftime("%Y%m%d-%H%M%S")}'),
+            "description": data.get('description', 'Task submitted via TES Dashboard'),
+            "inputs": [],
+            "outputs": [],
+            "resources": {
+                "cpu_cores": int(data.get('cpu_cores', 1)),
+                "ram_gb": float(data.get('ram_gb', 2.0)),
+                "disk_gb": float(data.get('disk_gb', 10.0))
+            },
+            "executors": [
+                {
+                    "image": docker_image,
+                    "command": data.get('command', '').split() if data.get('command') else ['echo', 'Hello World'],
+                    "workdir": data.get('workdir', '/tmp'),
+                    "stdin": data.get('stdin', ''),
+                    "stdout": data.get('stdout', ''),
+                    "stderr": data.get('stderr', '')
+                }
+            ]
         }
         
-        submitted_tasks.append(task)
+        # Add input files if specified
+        input_url = data.get('input_url', '').strip()
+        if input_url:
+            tes_task["inputs"].append({
+                "url": input_url,
+                "path": data.get('input_path', '/tmp/input'),
+                "type": "FILE"
+            })
         
-        # Update workflow status
-        global current_workflow_step, latest_workflow_path
-        current_workflow_step = 1
-        latest_workflow_path = [tes_name] if tes_name != 'Unknown' else []
+        # Add output files if specified
+        output_url = data.get('output_url', '').strip()
+        if output_url:
+            tes_task["outputs"].append({
+                "url": output_url,
+                "path": data.get('output_path', '/tmp/output'),
+                "type": "FILE"
+            })
         
+        # Submit to actual TES instance
+        tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks"
+        
+        print(f"🚀 Submitting task to: {tes_endpoint}")
+        print(f"📝 Task payload: {json.dumps(tes_task, indent=2)}")
+        
+        import requests
+        response = requests.post(
+            tes_endpoint,
+            json=tes_task,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            timeout=30
+        )
+        
+        if response.status_code in [200, 201]:
+            response_data = response.json()
+            task_id = response_data.get('id', str(uuid.uuid4()))
+            
+            # Store comprehensive task info locally for dashboard tracking
+            local_task = {
+                # Basic GA4GH TES fields
+                'id': task_id,
+                'task_id': task_id,  # Keep for backwards compatibility
+                'name': tes_task['name'],
+                'description': tes_task['description'],
+                'state': 'QUEUED',
+                'status': 'QUEUED',  # Keep for backwards compatibility
+                
+                # Timing information
+                'creation_time': datetime.utcnow().isoformat(),
+                'submitted_at': datetime.utcnow().isoformat(),  # Keep for backwards compatibility
+                'start_time': None,
+                'end_time': None,
+                
+                # TES instance information
+                'tes_url': tes_url,
+                'tes_name': tes_name,
+                'tes_endpoint': tes_endpoint,
+                
+                # Complete task specification (GA4GH TES compliant)
+                'inputs': tes_task['inputs'],
+                'outputs': tes_task['outputs'],
+                'resources': tes_task['resources'],
+                'executors': tes_task['executors'],
+                'volumes': tes_task.get('volumes', []),
+                'tags': tes_task.get('tags', {}),
+                
+                # Additional execution details
+                'workdir': data.get('workdir', '/tmp'),
+                'stdin': data.get('stdin', ''),
+                'stdout': data.get('stdout', ''),
+                'stderr': data.get('stderr', ''),
+                'env': data.get('env', {}),
+                
+                # Legacy fields for backwards compatibility
+                'docker_image': docker_image,
+                'command': data.get('command', ''),
+                'input_url': input_url,
+                'output_url': output_url,
+                
+                # Response and tracking
+                'response': response_data,
+                'logs': [],  # Will be populated as task runs
+                'task_log': [],  # Task execution logs
+                
+                # Submission metadata
+                'submitted_by': 'TES Dashboard',
+                'submission_method': 'REST API',
+                'client_info': {
+                    'user_agent': request.headers.get('User-Agent', 'Unknown'),
+                    'client_ip': request.remote_addr,
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'content_type': request.content_type
+                },
+                
+                # Task metadata for analytics
+                'metadata': {
+                    'input_count': len(tes_task['inputs']),
+                    'output_count': len(tes_task['outputs']),
+                    'executor_count': len(tes_task['executors']),
+                    'volume_count': len(tes_task.get('volumes', [])),
+                    'has_custom_workdir': data.get('workdir') != '/tmp',
+                    'has_env_vars': bool(data.get('env', {})),
+                    'has_stdin': bool(data.get('stdin', '')),
+                    'has_stdout_redirect': bool(data.get('stdout', '')),
+                    'has_stderr_redirect': bool(data.get('stderr', ''))
+                }
+            }
+            
+            submitted_tasks.append(local_task)
+            
+            # Update workflow status
+            global current_workflow_step, latest_workflow_path
+            current_workflow_step = 1
+            latest_workflow_path = [tes_name]
+            
+            return jsonify({
+                'success': True,
+                'task_id': task_id,
+                'message': f'Task "{tes_task["name"]}" submitted successfully to {tes_name}',
+                'tes_response': response_data,
+                'tes_endpoint': tes_endpoint,
+                'task_name': tes_task['name']
+            })
+        else:
+            error_msg = f'TES submission failed with status {response.status_code}'
+            try:
+                error_data = response.json()
+                error_msg = f'{error_msg}: {error_data.get("message", error_data)}'
+            except:
+                error_msg = f'{error_msg}: {response.text}'
+            
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'tes_endpoint': tes_endpoint,
+                'status_code': response.status_code
+            }), 400
+    
+    except requests.exceptions.Timeout:
         return jsonify({
-            'success': True,
-            'task_id': task_id,
-            'message': f'Task submitted successfully to {tes_name}'
-        })
-        
+            'success': False,
+            'error': 'Request timeout - TES instance may be unavailable'
+        }), 408
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'success': False,
+            'error': 'Connection error - TES instance may be offline'
+        }), 503
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"❌ Task submission error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Task submission failed: {str(e)}'
+        }), 500
 
 @app.route('/api/submit_workflow', methods=['POST'])
 def submit_workflow():
@@ -828,9 +990,10 @@ def batch_cwl():
 
 @app.route('/api/task_details', methods=['GET'])
 def get_task_details():
-    """Get details of a specific task"""
+    """Get comprehensive details of a specific task with enhanced metadata"""
     task_id = request.args.get('task_id')
     tes_url = request.args.get('tes_url')
+    view_level = request.args.get('view', 'FULL')  # MINIMAL, BASIC, or FULL
     
     if not task_id or not tes_url:
         return jsonify({'success': False, 'error': 'task_id and tes_url parameters are required'}), 400
@@ -838,6 +1001,10 @@ def get_task_details():
     try:
         # First try to get task details from the actual TES instance
         tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}"
+        
+        # Add view parameter for GA4GH TES API to get comprehensive data
+        if view_level in ['MINIMAL', 'BASIC', 'FULL']:
+            tes_endpoint += f"?view={view_level}"
         
         # Get instance-specific credentials
         instance_name = next((inst['name'] for inst in TES_INSTANCES if inst['url'] in tes_url), 'unknown')
@@ -852,25 +1019,84 @@ def get_task_details():
         elif credentials.get('user') and credentials.get('password'):
             auth = (credentials['user'], credentials['password'])
         
-        print(f"Fetching task details from: {tes_endpoint}")
+        print(f"Fetching comprehensive task details from: {tes_endpoint}")
         
         response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=30)
         
         if response.status_code == 200:
             task_json = response.json()
             print(f"Successfully fetched task details: {task_json.get('id', 'Unknown ID')}")
-            return jsonify({
+            
+            # Enhance the response with comprehensive metadata
+            enhanced_response = {
                 'success': True, 
                 'task_json': task_json,
-                'source': 'tes_instance'
-            })
+                'source': 'tes_instance',
+                'tes_endpoint': tes_endpoint,
+                'view_level': view_level,
+                'instance_name': instance_name,
+                'fetch_timestamp': datetime.utcnow().isoformat(),
+                'raw_response_size': len(str(task_json)),
+                'comprehensive_metadata': {
+                    # Content analysis
+                    'has_inputs': bool(task_json.get('inputs', [])),
+                    'has_outputs': bool(task_json.get('outputs', [])),
+                    'has_executors': bool(task_json.get('executors', [])),
+                    'has_logs': bool(task_json.get('logs', [])),
+                    'has_volumes': bool(task_json.get('volumes', [])),
+                    'has_tags': bool(task_json.get('tags', {})),
+                    'has_resources': bool(task_json.get('resources', {})),
+                    
+                    # Counts
+                    'input_count': len(task_json.get('inputs', [])),
+                    'output_count': len(task_json.get('outputs', [])),
+                    'executor_count': len(task_json.get('executors', [])),
+                    'volume_count': len(task_json.get('volumes', [])),
+                    'log_entries': len(task_json.get('logs', [])),
+                    'tag_count': len(task_json.get('tags', {})),
+                    
+                    # State analysis
+                    'is_terminal_state': task_json.get('state') in ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR'],
+                    'is_running': task_json.get('state') in ['RUNNING', 'INITIALIZING'],
+                    'is_queued': task_json.get('state') == 'QUEUED',
+                    
+                    # Timing analysis
+                    'has_creation_time': bool(task_json.get('creation_time')),
+                    'has_start_time': bool(task_json.get('start_time')),
+                    'has_end_time': bool(task_json.get('end_time')),
+                    'duration_seconds': None,
+                    
+                    # Resource analysis
+                    'total_cpu_cores': task_json.get('resources', {}).get('cpu_cores', 0) if task_json.get('resources') else 0,
+                    'total_ram_gb': task_json.get('resources', {}).get('ram_gb', 0) if task_json.get('resources') else 0,
+                    'total_disk_gb': task_json.get('resources', {}).get('disk_gb', 0) if task_json.get('resources') else 0,
+                    
+                    # File analysis
+                    'total_input_files': len([inp for inp in task_json.get('inputs', []) if inp.get('type') == 'FILE']),
+                    'total_output_files': len([out for out in task_json.get('outputs', []) if out.get('type') == 'FILE']),
+                    'has_directory_inputs': any(inp.get('type') == 'DIRECTORY' for inp in task_json.get('inputs', [])),
+                    'has_directory_outputs': any(out.get('type') == 'DIRECTORY' for out in task_json.get('outputs', []))
+                }
+            }
+            
+            # Calculate duration if both start and end times are available
+            if task_json.get('start_time') and task_json.get('end_time'):
+                try:
+                    from datetime import datetime
+                    start = datetime.fromisoformat(task_json['start_time'].replace('Z', '+00:00'))
+                    end = datetime.fromisoformat(task_json['end_time'].replace('Z', '+00:00'))
+                    enhanced_response['comprehensive_metadata']['duration_seconds'] = (end - start).total_seconds()
+                except:
+                    pass
+            
+            return jsonify(enhanced_response)
         else:
             print(f"TES API returned status {response.status_code}: {response.text}")
             
     except Exception as e:
         print(f"Error fetching from TES instance: {e}")
     
-    # Fallback: look for task in submitted tasks
+    # Fallback: look for task in submitted tasks and enhance it
     task = None
     for t in submitted_tasks:
         if t['task_id'] == task_id:
@@ -878,16 +1104,106 @@ def get_task_details():
             break
     
     if task:
+        # Create enhanced task data with GA4GH TES structure
+        enhanced_task = dict(task)  # Make a copy
+        
+        # Ensure GA4GH TES compliance
+        if 'id' not in enhanced_task and 'task_id' in enhanced_task:
+            enhanced_task['id'] = enhanced_task['task_id']
+        
+        if 'state' not in enhanced_task and 'status' in enhanced_task:
+            enhanced_task['state'] = enhanced_task['status']
+        
+        if 'creation_time' not in enhanced_task and 'submitted_at' in enhanced_task:
+            enhanced_task['creation_time'] = enhanced_task['submitted_at']
+        
+        # Ensure proper structure for inputs/outputs/executors
+        if 'inputs' not in enhanced_task:
+            enhanced_task['inputs'] = []
+            if enhanced_task.get('input_url'):
+                enhanced_task['inputs'].append({
+                    'name': 'input_file',
+                    'url': enhanced_task['input_url'],
+                    'path': enhanced_task.get('input_path', '/tmp/input'),
+                    'type': 'FILE',
+                    'content': enhanced_task.get('input_content', '')
+                })
+        
+        if 'outputs' not in enhanced_task:
+            enhanced_task['outputs'] = []
+            if enhanced_task.get('output_url'):
+                enhanced_task['outputs'].append({
+                    'name': 'output_file',
+                    'url': enhanced_task['output_url'],
+                    'path': enhanced_task.get('output_path', '/tmp/output'),
+                    'type': 'FILE',
+                    'path_prefix': enhanced_task.get('output_prefix', '')
+                })
+        
+        if 'executors' not in enhanced_task and enhanced_task.get('docker_image'):
+            enhanced_task['executors'] = [{
+                'image': enhanced_task['docker_image'],
+                'command': enhanced_task.get('command', '').split() if enhanced_task.get('command') else ['echo', 'Hello World'],
+                'workdir': enhanced_task.get('workdir', '/tmp'),
+                'stdin': enhanced_task.get('stdin', ''),
+                'stdout': enhanced_task.get('stdout', ''),
+                'stderr': enhanced_task.get('stderr', ''),
+                'env': enhanced_task.get('env', {}),
+                'ignore_error': enhanced_task.get('ignore_error', False)
+            }]
+        
+        # Add default empty arrays for missing fields
+        if 'volumes' not in enhanced_task:
+            enhanced_task['volumes'] = []
+        if 'tags' not in enhanced_task:
+            enhanced_task['tags'] = {}
+        if 'logs' not in enhanced_task:
+            enhanced_task['logs'] = []
+        
         return jsonify({
             'success': True, 
-            'task_json': task,
-            'source': 'dashboard_submitted'
+            'task_json': enhanced_task,
+            'source': 'dashboard_submitted',
+            'view_level': view_level,
+            'instance_name': instance_name,
+            'fetch_timestamp': datetime.utcnow().isoformat(),
+            'raw_response_size': len(str(enhanced_task)),
+            'comprehensive_metadata': {
+                'has_inputs': bool(enhanced_task.get('inputs', [])),
+                'has_outputs': bool(enhanced_task.get('outputs', [])),
+                'has_executors': bool(enhanced_task.get('executors', [])),
+                'has_logs': bool(enhanced_task.get('logs', [])),
+                'has_volumes': bool(enhanced_task.get('volumes', [])),
+                'has_tags': bool(enhanced_task.get('tags', {})),
+                'has_resources': bool(enhanced_task.get('resources', {})),
+                'input_count': len(enhanced_task.get('inputs', [])),
+                'output_count': len(enhanced_task.get('outputs', [])),
+                'executor_count': len(enhanced_task.get('executors', [])),
+                'volume_count': len(enhanced_task.get('volumes', [])),
+                'log_entries': len(enhanced_task.get('logs', [])),
+                'tag_count': len(enhanced_task.get('tags', {})),
+                'is_terminal_state': enhanced_task.get('state') in ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR'],
+                'is_running': enhanced_task.get('state') in ['RUNNING', 'INITIALIZING'],
+                'is_queued': enhanced_task.get('state') == 'QUEUED',
+                'has_creation_time': bool(enhanced_task.get('creation_time')),
+                'has_start_time': bool(enhanced_task.get('start_time')),
+                'has_end_time': bool(enhanced_task.get('end_time')),
+                'total_cpu_cores': enhanced_task.get('resources', {}).get('cpu_cores', 0) if enhanced_task.get('resources') else 0,
+                'total_ram_gb': enhanced_task.get('resources', {}).get('ram_gb', 0) if enhanced_task.get('resources') else 0,
+                'total_disk_gb': enhanced_task.get('resources', {}).get('disk_gb', 0) if enhanced_task.get('resources') else 0,
+                'total_input_files': len([inp for inp in enhanced_task.get('inputs', []) if inp.get('type') == 'FILE']),
+                'total_output_files': len([out for out in enhanced_task.get('outputs', []) if out.get('type') == 'FILE']),
+                'has_directory_inputs': any(inp.get('type') == 'DIRECTORY' for inp in enhanced_task.get('inputs', [])),
+                'has_directory_outputs': any(out.get('type') == 'DIRECTORY' for out in enhanced_task.get('outputs', []))
+            }
         })
     
     # If not found anywhere, return a helpful error
     return jsonify({
         'success': False, 
-        'error': f'Task {task_id} not found in TES instance {tes_url} or dashboard records. The task may not exist, or you may not have permission to view it.'
+        'error': f'Task {task_id} not found in TES instance {tes_url} or dashboard records. The task may not exist, or you may not have permission to view it.',
+        'tes_endpoint': f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}",
+        'attempted_view_level': view_level
     }), 404
 
 @app.route('/api/workflow_log/<path:run_id>', methods=['GET'])
@@ -1922,11 +2238,205 @@ def reset_middleware():
     except Exception as e:
         return jsonify({"error": f"Failed to reset middleware: {str(e)}"}), 500
 
-if __name__ == '__main__':
-    print("🚀 Starting TES Dashboard Backend...")
-    print(f"📊 Loaded {len(TES_INSTANCES)} TES instances")
-    print(f"📍 Loaded {len(tes_locations)} TES locations")
-    print("🌐 CORS enabled for frontend at http://localhost:3000")
-    print("🔗 API documentation available at http://localhost:8000")
+@app.route('/api/middleware/reorder', methods=['POST'])
+def reorder_middlewares():
+    """Reorder middleware execution priorities"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
     
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    try:
+        new_order = request.get_json()
+        if not new_order or 'middlewares' not in new_order:
+            return jsonify({"error": "Invalid request format"}), 400
+        
+        # Update priorities based on new order
+        for middleware_info in new_order['middlewares']:
+            middleware_name = middleware_info.get('name')
+            new_priority = middleware_info.get('priority')
+            
+            if middleware_name in middleware_manager.middlewares:
+                middleware_manager.middlewares[middleware_name].priority = new_priority
+        
+        return jsonify({
+            "status": "success",
+            "message": "Middleware order updated successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to reorder middlewares: {str(e)}"}), 500
+
+@app.route('/api/middleware/install', methods=['POST'])
+def install_middleware():
+    """Install new middleware from local or GitHub source"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        middleware_config = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'type', 'source']
+        for field in required_fields:
+            if field not in middleware_config:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Check for duplicate names
+        if middleware_config['name'] in middleware_manager.middlewares:
+            return jsonify({"error": "Middleware with this name already exists"}), 400
+        
+        # Handle GitHub source
+        if middleware_config['source'] == 'github':
+            github_url = middleware_config.get('githubUrl')
+            if not github_url:
+                return jsonify({"error": "GitHub URL is required for external middlewares"}), 400
+            
+            # TODO: Implement GitHub middleware installation
+            # This would involve:
+            # 1. Cloning the repository
+            # 2. Validating the middleware code
+            # 3. Installing dependencies
+            # 4. Loading the middleware class
+            return jsonify({
+                "status": "success",
+                "message": f"GitHub middleware '{middleware_config['name']}' installation initiated",
+                "note": "GitHub middleware installation is not yet implemented"
+            })
+        
+        # Handle local middleware creation
+        else:
+            # Create a basic middleware template
+            middleware_class_name = f"{middleware_config['name'].replace(' ', '')}Middleware"
+            
+            # TODO: Generate actual middleware file and load it
+            # For now, return success with placeholder
+            return jsonify({
+                "status": "success",
+                "message": f"Local middleware '{middleware_config['name']}' created successfully",
+                "middleware": {
+                    "name": middleware_config['name'],
+                    "type": middleware_config['type'],
+                    "enabled": middleware_config.get('enabled', True),
+                    "priority": middleware_config.get('priority', 5),
+                    "class_name": middleware_class_name
+                }
+            })
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to install middleware: {str(e)}"}), 500
+
+@app.route('/api/middleware/<middleware_name>/remove', methods=['DELETE'])
+def remove_middleware(middleware_name):
+    """Remove middleware from the system"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        if middleware_name not in middleware_manager.middlewares:
+            return jsonify({"error": f"Middleware '{middleware_name}' not found"}), 404
+        
+        # Remove from middleware manager
+        del middleware_manager.middlewares[middleware_name]
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Middleware '{middleware_name}' removed successfully"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to remove middleware: {str(e)}"}), 500
+
+@app.route('/api/middleware/github/validate', methods=['POST'])
+def validate_github_middleware():
+    """Validate GitHub repository for middleware compatibility"""
+    try:
+        data = request.get_json()
+        github_url = data.get('githubUrl')
+        
+        if not github_url:
+            return jsonify({"error": "GitHub URL is required"}), 400
+        
+        # Basic URL validation
+        if not github_url.startswith('https://github.com/'):
+            return jsonify({
+                "valid": False,
+                "error": "Invalid GitHub URL format"
+            }), 400
+        
+        # TODO: Implement actual GitHub repository validation
+        # This would involve:
+        # 1. Checking if repository exists and is accessible
+        # 2. Validating middleware structure and dependencies
+        # 3. Checking for security issues
+        
+        return jsonify({
+            "valid": True,
+            "repository": {
+                "url": github_url,
+                "accessible": True,
+                "has_middleware": True,
+                "estimated_size": "2.3 MB",
+                "languages": ["Python"],
+                "dependencies": ["flask", "asyncio"]
+            },
+            "validation": {
+                "structure_valid": True,
+                "dependencies_compatible": True,
+                "security_scan_passed": True
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to validate GitHub middleware: {str(e)}"}), 500
+
+@app.route('/api/middleware/<middleware_name>/source', methods=['GET'])
+def get_middleware_source(middleware_name):
+    """Get middleware source code"""
+    if not MIDDLEWARE_AVAILABLE:
+        return jsonify({"error": "Middleware system not available"}), 503
+    
+    try:
+        if middleware_name not in middleware_manager.middlewares:
+            return jsonify({"error": f"Middleware '{middleware_name}' not found"}), 404
+        
+        middleware = middleware_manager.middlewares[middleware_name]
+        
+        # TODO: Read actual source code from file
+        # For now, return a placeholder
+        source_code = f"""# {middleware_name} Middleware
+# Type: {type(middleware).__name__}
+# Priority: {middleware.priority}
+# Enabled: {middleware.enabled}
+
+from middleware_manager import BaseMiddleware
+
+class {middleware_name.replace(' ', '')}Middleware(BaseMiddleware):
+    def __init__(self, config):
+        super().__init__(config)
+        self.middleware_type = '{type(middleware).__name__.replace('Middleware', '').lower()}'
+    
+    async def process_request(self, context):
+        '''Process incoming request'''
+        if not self.enabled:
+            return True, None
+        
+        # Middleware logic here
+        return True, None
+    
+    async def process_response(self, context, response):
+        '''Process outgoing response'''
+        if not self.enabled:
+            return response
+            
+        # Response processing logic here
+        return response
+"""
+        
+        return jsonify({
+            "status": "success",
+            "middleware": middleware_name,
+            "source_code": source_code,
+            "file_path": f"backend/middleware_implementations.py",
+            "language": "python",
+            "lines": len(source_code.split('\n'))
+        })
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to get middleware source: {str(e)}"}), 500

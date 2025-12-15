@@ -2,11 +2,15 @@ import api from './api';
 
 // Task-related API functions
 export const taskService = {
-  // Get task details
-  getTaskDetails: async (tesUrl, taskId) => {
+  // Get task details with comprehensive information
+  getTaskDetails: async (tesUrl, taskId, viewLevel = 'FULL') => {
     try {
       const response = await api.get('/api/task_details', {
-        params: { tes_url: tesUrl, task_id: taskId }
+        params: { 
+          tes_url: tesUrl, 
+          task_id: taskId,
+          view: viewLevel
+        }
       });
       return response.data;
     } catch (error) {
