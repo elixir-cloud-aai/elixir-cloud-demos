@@ -145,6 +145,10 @@ spec:
       volumeMounts:
         - name: shared-data
           mountPath: /shared
+        - name: tes-instances-config
+          mountPath: /shared/app/backend/.tes_instances
+          subPath: .tes_instances
+          readOnly: true
         - name: kube-api-access-h2nfr
           readOnly: true
           mountPath: /var/run/secrets/kubernetes.io/serviceaccount
@@ -192,6 +196,10 @@ spec:
   volumes:
     - name: shared-data
       emptyDir: {}
+    - name: tes-instances-config
+      configMap:
+        name: tes-instances-config
+        defaultMode: 420
     - name: kube-api-access-h2nfr
       projected:
         sources:

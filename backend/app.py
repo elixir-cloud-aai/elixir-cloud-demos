@@ -8,7 +8,7 @@ import subprocess
 import uuid
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import functools
 
@@ -547,15 +547,18 @@ def submit_task():
     """Submit a task to TES instance using GA4GH TES v1 API"""
     try:
         data = request.get_json()
+        print(f"🔄 Received task submission data: {json.dumps(data, indent=2)}")
         
         # Validate required fields
         tes_url = data.get('tes_instance')
         docker_image = data.get('docker_image')
         
         if not tes_url or not docker_image:
+            error_msg = f'TES instance URL and Docker image are required. Got tes_url: {tes_url}, docker_image: {docker_image}'
+            print(f"❌ Validation error: {error_msg}")
             return jsonify({
                 'success': False,
-                'error': 'TES instance URL and Docker image are required'
+                'error': error_msg
             }), 400
         
         # Find TES instance name from our configuration
@@ -567,8 +570,27 @@ def submit_task():
                 break
         
         # Create GA4GH TES task specification
+        executor = {
+            "image": docker_image,
+            "command": data.get('command', '').split() if data.get('command') else ['echo', 'Hello World'],
+            "workdir": data.get('workdir', '/tmp')
+        }
+        
+        # Only add stdin/stdout/stderr if they are valid absolute paths
+        stdin = data.get('stdin', '').strip()
+        if stdin and stdin.startswith('/'):
+            executor["stdin"] = stdin
+            
+        stdout = data.get('stdout', '').strip()
+        if stdout and stdout.startswith('/'):
+            executor["stdout"] = stdout
+            
+        stderr = data.get('stderr', '').strip()
+        if stderr and stderr.startswith('/'):
+            executor["stderr"] = stderr
+        
         tes_task = {
-            "name": data.get('task_name', f'Task-{datetime.utcnow().strftime("%Y%m%d-%H%M%S")}'),
+            "name": data.get('task_name', f'Task-{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}'),
             "description": data.get('description', 'Task submitted via TES Dashboard'),
             "inputs": [],
             "outputs": [],
@@ -577,16 +599,7 @@ def submit_task():
                 "ram_gb": float(data.get('ram_gb', 2.0)),
                 "disk_gb": float(data.get('disk_gb', 10.0))
             },
-            "executors": [
-                {
-                    "image": docker_image,
-                    "command": data.get('command', '').split() if data.get('command') else ['echo', 'Hello World'],
-                    "workdir": data.get('workdir', '/tmp'),
-                    "stdin": data.get('stdin', ''),
-                    "stdout": data.get('stdout', ''),
-                    "stderr": data.get('stderr', '')
-                }
-            ]
+            "executors": [executor]
         }
         
         # Add input files if specified
@@ -623,6 +636,14 @@ def submit_task():
             },
             timeout=30
         )
+        
+        print(f"📨 TES Response Status: {response.status_code}")
+        print(f"📨 TES Response Headers: {dict(response.headers)}")
+        try:
+            response_json = response.json()
+            print(f"📨 TES Response Body: {json.dumps(response_json, indent=2)}")
+        except:
+            print(f"📨 TES Response Body (text): {response.text}")
         
         if response.status_code in [200, 201]:
             response_data = response.json()
@@ -2020,7 +2041,11 @@ def index():
     try:
         with open(os.path.join(os.path.dirname(__file__), 'tes_instance_locations.json'), 'r') as f:
             locations_data = json.load(f)
-            nodes = locations_data.get('nodes', [])
+            # Handle both array and object formats
+            if isinstance(locations_data, list):
+                nodes = locations_data
+            else:
+                nodes = locations_data.get('nodes', [])
     except Exception as e:
         print(f"Error loading nodes: {e}")
         nodes = []
