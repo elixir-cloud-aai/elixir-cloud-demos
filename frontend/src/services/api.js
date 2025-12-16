@@ -7,9 +7,16 @@ const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  // TEMPORARY WORKAROUND: Use direct backend URL while proxy is broken
+  // Production - determine if we're using proxy or direct backend access
   if (process.env.NODE_ENV === 'production') {
-    return 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
+    // If we're on the same domain as the frontend (proxy scenario)
+    if (window.location.origin.includes('tes-dashboard-frontend-route')) {
+      // Use relative path - nginx will proxy /api to backend
+      return '';
+    } else {
+      // Direct backend access (fallback)
+      return 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
+    }
   }
   
   // Development - use localhost (backend running on port 5001)
