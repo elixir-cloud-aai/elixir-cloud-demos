@@ -8,7 +8,7 @@ import subprocess
 import uuid
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import functools
 
@@ -295,6 +295,181 @@ def after_request(response):
 def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'TES Dashboard API is running'})
+
+# Mock TES Service Endpoints (for testing when external TES instances are unavailable)
+@app.route('/ga4gh/tes/v1/service-info', methods=['GET'])
+def mock_tes_service_info():
+    """Mock TES service-info endpoint for testing purposes"""
+    return jsonify({
+        "id": "mock-tes-service",
+        "name": "Mock Task Execution Service",
+        "type": {
+            "group": "org.ga4gh",
+            "artifact": "tes",
+            "version": "1.1.0"
+        },
+        "description": "Mock TES service for testing when external instances are unavailable",
+        "organization": {
+            "name": "TES Dashboard Mock Service",
+            "url": "http://localhost:8000"
+        },
+        "contactUrl": "mailto:test@example.com",
+        "documentationUrl": "https://ga4gh.github.io/task-execution-schemas/",
+        "version": "1.1.0",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": datetime.now().isoformat() + "Z",
+        "environment": "development"
+    })
+
+@app.route('/ga4gh/tes/v1/tasks', methods=['POST'])
+def mock_tes_create_task():
+    """Mock TES task creation endpoint"""
+    try:
+        task_data = request.get_json()
+        task_id = str(uuid.uuid4())
+        
+        # Store the mock task
+        mock_task = {
+            "id": task_id,
+            "name": task_data.get("name", f"Task-{datetime.now().strftime('%Y%m%d-%H%M%S')}"),
+            "description": task_data.get("description", "Mock task execution"),
+            "state": "QUEUED",
+            "inputs": task_data.get("inputs", []),
+            "outputs": task_data.get("outputs", []),
+            "executors": task_data.get("executors", []),
+            "resources": task_data.get("resources", {}),
+            "volumes": task_data.get("volumes", []),
+            "tags": task_data.get("tags", {}),
+            "logs": [],
+            "creation_time": datetime.now().isoformat() + "Z"
+        }
+        
+        # Store in memory for mock retrieval
+        if not hasattr(app, 'mock_tasks'):
+            app.mock_tasks = {}
+        app.mock_tasks[task_id] = mock_task
+        
+        print(f"✅ Mock TES task created: {task_id}")
+        
+        return jsonify({"id": task_id}), 201
+        
+    except Exception as e:
+        print(f"❌ Mock TES task creation failed: {e}")
+        return jsonify({
+            "message": f"Task creation failed: {str(e)}",
+            "code": 400
+        }), 400
+
+@app.route('/ga4gh/tes/v1/tasks/<task_id>', methods=['GET'])
+def mock_tes_get_task(task_id):
+    """Mock TES task retrieval endpoint"""
+    try:
+        if not hasattr(app, 'mock_tasks') or task_id not in app.mock_tasks:
+            return jsonify({
+                "message": f"Task not found: {task_id}",
+                "code": 404
+            }), 404
+        
+        task = app.mock_tasks[task_id]
+        
+        # Simulate task progression
+        current_time = datetime.now()
+        creation_time = datetime.fromisoformat(task["creation_time"].replace("Z", ""))
+        
+        # Simple state progression based on time elapsed
+        elapsed_seconds = (current_time - creation_time).total_seconds()
+        
+        if elapsed_seconds < 5:
+            task["state"] = "QUEUED"
+        elif elapsed_seconds < 15:
+            task["state"] = "INITIALIZING"
+            task["start_time"] = (creation_time + timedelta(seconds=5)).isoformat() + "Z"
+        elif elapsed_seconds < 30:
+            task["state"] = "RUNNING"
+        else:
+            task["state"] = "COMPLETE"
+            task["end_time"] = (creation_time + timedelta(seconds=30)).isoformat() + "Z"
+            
+            # Add mock logs for completed tasks
+            if not task["logs"]:
+                task["logs"] = [{
+                    "start_time": task.get("start_time", task["creation_time"]),
+                    "end_time": task.get("end_time", datetime.now().isoformat() + "Z"),
+                    "metadata": {
+                        "host": "mock-tes-host",
+                        "executor": "mock-executor"
+                    },
+                    "logs": [{
+                        "start_time": task.get("start_time", task["creation_time"]),
+                        "end_time": task.get("end_time", datetime.now().isoformat() + "Z"),
+                        "stdout": "Mock task executed successfully\nOutput generated\nTask completed\n",
+                        "stderr": "",
+                        "exit_code": 0
+                    }]
+                }]
+        
+        return jsonify(task)
+        
+    except Exception as e:
+        return jsonify({
+            "message": f"Failed to retrieve task: {str(e)}",
+            "code": 500
+        }), 500
+
+@app.route('/ga4gh/tes/v1/tasks', methods=['GET'])
+def mock_tes_list_tasks():
+    """Mock TES task listing endpoint"""
+    try:
+        if not hasattr(app, 'mock_tasks'):
+            app.mock_tasks = {}
+        
+        # Get query parameters
+        view = request.args.get('view', 'MINIMAL')
+        page_size = int(request.args.get('page_size', 10))
+        page_token = request.args.get('page_token', '')
+        
+        tasks = list(app.mock_tasks.values())
+        
+        # Simple pagination
+        start_index = 0
+        if page_token:
+            try:
+                start_index = int(page_token)
+            except ValueError:
+                start_index = 0
+        
+        end_index = start_index + page_size
+        page_tasks = tasks[start_index:end_index]
+        
+        # Filter based on view level
+        if view == 'MINIMAL':
+            page_tasks = [{
+                'id': task['id'],
+                'state': task['state']
+            } for task in page_tasks]
+        elif view == 'BASIC':
+            page_tasks = [{
+                'id': task['id'],
+                'name': task['name'],
+                'state': task['state'],
+                'creation_time': task['creation_time']
+            } for task in page_tasks]
+        
+        response = {
+            'tasks': page_tasks
+        }
+        
+        # Add next page token if there are more tasks
+        if end_index < len(tasks):
+            response['next_page_token'] = str(end_index)
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({
+            "message": f"Failed to list tasks: {str(e)}",
+            "code": 500
+        }), 500
 
 @app.route('/api/instances', methods=['GET'])
 def get_instances():

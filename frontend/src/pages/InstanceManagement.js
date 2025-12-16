@@ -389,7 +389,7 @@ const InstanceManagement = () => {
       // Load managed instances (user-configurable)
       try {
         console.log('🔄 Loading managed instances from /api/nodes');
-        const managedResponse = await api.get('/api/nodes');
+        const managedResponse = await api.get('/nodes');
         const managedData = managedResponse.data;
         console.log('✅ Loaded managed instances data:', managedData);
         
@@ -411,7 +411,7 @@ const InstanceManagement = () => {
       // Load available instances (discovered/preconfigured)
       try {
         console.log('🔄 Loading available instances from /api/instances');
-        const availableResponse = await api.get('/api/instances');
+        const availableResponse = await api.get('/instances');
         const availableData = availableResponse.data;
         console.log('✅ Loaded available instances data:', availableData);
         

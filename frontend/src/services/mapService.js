@@ -4,7 +4,7 @@ export const mapService = {
   // Get TES instance locations with geographic coordinates
   getTesLocations: async () => {
     try {
-      const response = await api.get('/api/tes_locations');
+      const response = await api.get('/tes_locations');
       return response.data;
     } catch (error) {
       console.error('Error fetching TES locations:', error);
@@ -15,7 +15,7 @@ export const mapService = {
   // Get workflow execution paths
   getWorkflowPaths: async () => {
     try {
-      const response = await api.get('/api/dashboard_data');
+      const response = await api.get('/dashboard_data');
       const { batch_runs, workflow_runs } = response.data;
       
       // Combine and format workflow paths
@@ -49,7 +49,7 @@ export const mapService = {
   // Get latest workflow status for path animation
   getLatestWorkflowStatus: async () => {
     try {
-      const response = await api.get('/api/latest_workflow_status');
+      const response = await api.get('/latest_workflow_status');
       return response.data;
     } catch (error) {
       console.error('Error fetching latest workflow status:', error);

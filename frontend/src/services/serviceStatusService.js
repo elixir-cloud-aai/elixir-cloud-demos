@@ -6,7 +6,7 @@ export const serviceStatusService = {
   getServiceStatus: async () => {
     try {
       console.log('🔍 ServiceStatusService: Fetching service status');
-      const response = await api.get('/api/service-status');
+      const response = await api.get('/service-status');
       console.log('✅ ServiceStatusService: Service status received:', response.data);
       return response.data;
     } catch (error) {

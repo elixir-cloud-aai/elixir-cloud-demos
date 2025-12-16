@@ -124,7 +124,6 @@ spec:
           TESK/Kubernetes @ ELIXIR-GR,https://tesk-eu.hypatia-comp.athenarc.gr/
           TESK/OpenShift @ ELIXIR-FI,https://csc-tesk-noauth.rahtiapp.fi/
           TESK North America,https://tesk-na.cloud.e-infra.cz/
-          TESK Canada Quebec,https://tesk.c3g.calculquebec.ca/
 
           # Local Development
           Local TES,http://localhost:8080

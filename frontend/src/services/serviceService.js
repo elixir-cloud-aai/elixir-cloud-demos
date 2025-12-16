@@ -6,7 +6,7 @@ export const serviceService = {
   getServiceInfo: async () => {
     try {
       // Use dashboard data to get service info
-      const response = await api.get('/api/dashboard_data');
+      const response = await api.get('/dashboard_data');
       const dashboardData = response.data;
       
       return {
@@ -58,7 +58,7 @@ export const serviceService = {
   // Get topology logs
   getTopologyLogs: async () => {
     try {
-      const response = await api.get('/api/topology_logs');
+      const response = await api.get('/topology_logs');
       return response.data;
     } catch (error) {
       console.error('Error fetching topology logs:', error);
