@@ -627,6 +627,14 @@ def submit_task():
         print(f"📝 Task payload: {json.dumps(tes_task, indent=2)}")
         
         import requests
+        
+        # Test network connectivity first
+        try:
+            test_response = requests.get(f"{tes_url.rstrip('/')}/ga4gh/tes/v1/service-info", timeout=10)
+            print(f"🔍 TES connectivity test: {test_response.status_code}")
+        except Exception as connectivity_error:
+            print(f"⚠️ TES connectivity test failed: {connectivity_error}")
+        
         response = requests.post(
             tes_endpoint,
             json=tes_task,
@@ -755,10 +763,14 @@ def submit_task():
             'success': False,
             'error': 'Request timeout - TES instance may be unavailable'
         }), 408
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f'Connection error - TES instance may be offline: {str(e)}'
+        print(f"❌ Connection Error: {error_msg}")
+        print(f"🌐 Attempted TES endpoint: {tes_endpoint}")
         return jsonify({
             'success': False,
-            'error': 'Connection error - TES instance may be offline'
+            'error': error_msg,
+            'tes_endpoint': tes_endpoint
         }), 503
     except Exception as e:
         print(f"❌ Task submission error: {str(e)}")
