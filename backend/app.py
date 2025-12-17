@@ -2770,7 +2770,7 @@ class {middleware_name.replace(' ', '')}Middleware(BaseMiddleware):
 
 if __name__ == '__main__':
     # Determine port based on environment
-    port = int(os.getenv('PORT', '5001'))  # Default to 5001 for local dev, 8000 for production
+    port = int(os.getenv('PORT', '5001'))  # Default to 5001 for local dev, uses env PORT for production
     debug_mode = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
     
     # Using hardcoded instances - no health checking needed!

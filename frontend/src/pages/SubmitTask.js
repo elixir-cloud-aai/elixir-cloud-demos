@@ -210,7 +210,7 @@ const SubmitTask = () => {
 
       
       // Test with fetch first
-      const fetchResponse = await fetch('http://localhost:5001/api/test_connection', {
+      const fetchResponse = await fetch('http://localhost:8000/api/test_connection', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

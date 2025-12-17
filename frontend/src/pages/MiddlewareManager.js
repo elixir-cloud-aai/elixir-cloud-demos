@@ -209,7 +209,7 @@ const MiddlewareManager = () => {
         {middlewares.map((middleware) => (
           <div 
             key={middleware.name} 
-            className={`middleware-card ${middleware.enabled ? 'enabled' : 'disabled'}`}
+            className={`middleware-card ${middleware.enabled ? 'enabled' : 'disabled'} ${middleware.name === 'monitoring' ? 'monitoring-card' : ''}`}
             onClick={() => setSelectedMiddleware(
               selectedMiddleware?.name === middleware.name ? null : middleware
             )}

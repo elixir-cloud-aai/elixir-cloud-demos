@@ -19,8 +19,8 @@ const getApiBaseUrl = () => {
     }
   }
   
-  // Development - use localhost (backend running on port 5001)
-  return 'http://localhost:5001';
+  // Development - use localhost (backend running on port 8000)
+  return 'http://localhost:8000';
 };
 
 // Create axios instance with default config
