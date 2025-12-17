@@ -99,7 +99,7 @@ const Sidebar = () => {
 
       <NavSection>
         <SectionTitle>Monitoring</SectionTitle>
-        <NavItem to="/service-info" $isActive={isActive('/service-info')}>
+        <NavItem to="/api/service-info" $isActive={isActive('/api/service-info')}>
           <NavIcon><Server size={18} /></NavIcon>
           <NavText>Service Info</NavText>
         </NavItem>

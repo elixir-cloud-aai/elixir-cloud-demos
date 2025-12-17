@@ -26,32 +26,23 @@ const getApiBaseUrl = () => {
 // Create axios instance with default config
 const api = axios.create({
   baseURL: getApiBaseUrl(),
-  timeout: 30000, // Increased timeout for K8s
+  timeout: 45000, // Increased timeout for external TES instances
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// Add request interceptor for debugging
 api.interceptors.request.use(
-  (config) => {
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-    return config;
-  },
-  (error) => {
-    console.error('❌ API Request Error:', error);
-    return Promise.reject(error);
-  }
+  (config) => config,
+  (error) => Promise.reject(error)
 );
 
-// Add response interceptor for debugging
 api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, error.message);
+    if (error.response?.status >= 500) {
+      console.error('API Server Error:', error.message);
+    }
     return Promise.reject(error);
   }
 );

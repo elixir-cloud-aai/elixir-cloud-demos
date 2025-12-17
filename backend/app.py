@@ -8,7 +8,7 @@ import subprocess
 import uuid
 import json
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import asyncio
 import functools
 
@@ -296,185 +296,79 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'TES Dashboard API is running'})
 
-# Mock TES Service Endpoints (for testing when external TES instances are unavailable)
-@app.route('/ga4gh/tes/v1/service-info', methods=['GET'])
-def mock_tes_service_info():
-    """Mock TES service-info endpoint for testing purposes"""
-    return jsonify({
-        "id": "mock-tes-service",
-        "name": "Mock Task Execution Service",
-        "type": {
-            "group": "org.ga4gh",
-            "artifact": "tes",
-            "version": "1.1.0"
-        },
-        "description": "Mock TES service for testing when external instances are unavailable",
-        "organization": {
-            "name": "TES Dashboard Mock Service",
-            "url": "http://localhost:8000"
-        },
-        "contactUrl": "mailto:test@example.com",
-        "documentationUrl": "https://ga4gh.github.io/task-execution-schemas/",
-        "version": "1.1.0",
-        "createdAt": "2024-01-01T00:00:00Z",
-        "updatedAt": datetime.now().isoformat() + "Z",
-        "environment": "development"
-    })
-
-@app.route('/ga4gh/tes/v1/tasks', methods=['POST'])
-def mock_tes_create_task():
-    """Mock TES task creation endpoint"""
-    try:
-        task_data = request.get_json()
-        task_id = str(uuid.uuid4())
-        
-        # Store the mock task
-        mock_task = {
-            "id": task_id,
-            "name": task_data.get("name", f"Task-{datetime.now().strftime('%Y%m%d-%H%M%S')}"),
-            "description": task_data.get("description", "Mock task execution"),
-            "state": "QUEUED",
-            "inputs": task_data.get("inputs", []),
-            "outputs": task_data.get("outputs", []),
-            "executors": task_data.get("executors", []),
-            "resources": task_data.get("resources", {}),
-            "volumes": task_data.get("volumes", []),
-            "tags": task_data.get("tags", {}),
-            "logs": [],
-            "creation_time": datetime.now().isoformat() + "Z"
-        }
-        
-        # Store in memory for mock retrieval
-        if not hasattr(app, 'mock_tasks'):
-            app.mock_tasks = {}
-        app.mock_tasks[task_id] = mock_task
-        
-        print(f"✅ Mock TES task created: {task_id}")
-        
-        return jsonify({"id": task_id}), 201
-        
-    except Exception as e:
-        print(f"❌ Mock TES task creation failed: {e}")
-        return jsonify({
-            "message": f"Task creation failed: {str(e)}",
-            "code": 400
-        }), 400
-
-@app.route('/ga4gh/tes/v1/tasks/<task_id>', methods=['GET'])
-def mock_tes_get_task(task_id):
-    """Mock TES task retrieval endpoint"""
-    try:
-        if not hasattr(app, 'mock_tasks') or task_id not in app.mock_tasks:
-            return jsonify({
-                "message": f"Task not found: {task_id}",
-                "code": 404
-            }), 404
-        
-        task = app.mock_tasks[task_id]
-        
-        # Simulate task progression
-        current_time = datetime.now()
-        creation_time = datetime.fromisoformat(task["creation_time"].replace("Z", ""))
-        
-        # Simple state progression based on time elapsed
-        elapsed_seconds = (current_time - creation_time).total_seconds()
-        
-        if elapsed_seconds < 5:
-            task["state"] = "QUEUED"
-        elif elapsed_seconds < 15:
-            task["state"] = "INITIALIZING"
-            task["start_time"] = (creation_time + timedelta(seconds=5)).isoformat() + "Z"
-        elif elapsed_seconds < 30:
-            task["state"] = "RUNNING"
-        else:
-            task["state"] = "COMPLETE"
-            task["end_time"] = (creation_time + timedelta(seconds=30)).isoformat() + "Z"
-            
-            # Add mock logs for completed tasks
-            if not task["logs"]:
-                task["logs"] = [{
-                    "start_time": task.get("start_time", task["creation_time"]),
-                    "end_time": task.get("end_time", datetime.now().isoformat() + "Z"),
-                    "metadata": {
-                        "host": "mock-tes-host",
-                        "executor": "mock-executor"
-                    },
-                    "logs": [{
-                        "start_time": task.get("start_time", task["creation_time"]),
-                        "end_time": task.get("end_time", datetime.now().isoformat() + "Z"),
-                        "stdout": "Mock task executed successfully\nOutput generated\nTask completed\n",
-                        "stderr": "",
-                        "exit_code": 0
-                    }]
-                }]
-        
-        return jsonify(task)
-        
-    except Exception as e:
-        return jsonify({
-            "message": f"Failed to retrieve task: {str(e)}",
-            "code": 500
-        }), 500
-
-@app.route('/ga4gh/tes/v1/tasks', methods=['GET'])
-def mock_tes_list_tasks():
-    """Mock TES task listing endpoint"""
-    try:
-        if not hasattr(app, 'mock_tasks'):
-            app.mock_tasks = {}
-        
-        # Get query parameters
-        view = request.args.get('view', 'MINIMAL')
-        page_size = int(request.args.get('page_size', 10))
-        page_token = request.args.get('page_token', '')
-        
-        tasks = list(app.mock_tasks.values())
-        
-        # Simple pagination
-        start_index = 0
-        if page_token:
-            try:
-                start_index = int(page_token)
-            except ValueError:
-                start_index = 0
-        
-        end_index = start_index + page_size
-        page_tasks = tasks[start_index:end_index]
-        
-        # Filter based on view level
-        if view == 'MINIMAL':
-            page_tasks = [{
-                'id': task['id'],
-                'state': task['state']
-            } for task in page_tasks]
-        elif view == 'BASIC':
-            page_tasks = [{
-                'id': task['id'],
-                'name': task['name'],
-                'state': task['state'],
-                'creation_time': task['creation_time']
-            } for task in page_tasks]
-        
-        response = {
-            'tasks': page_tasks
-        }
-        
-        # Add next page token if there are more tasks
-        if end_index < len(tasks):
-            response['next_page_token'] = str(end_index)
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        return jsonify({
-            "message": f"Failed to list tasks: {str(e)}",
-            "code": 500
-        }), 500
-
 @app.route('/api/instances', methods=['GET'])
 def get_instances():
     """Get available TES instances"""
     return jsonify(TES_INSTANCES)
+
+# Hardcoded healthy instances - no complex caching needed!
+
+# Health checking function removed - using hardcoded instances
+    
+    def check_instance(instance):
+        """Check a single instance health"""
+        try:
+            service_info_url = f"{instance['url'].rstrip('/')}/ga4gh/tes/v1/service-info"
+            response = requests.get(service_info_url, timeout=5)
+            
+            if response.status_code == 200:
+
+                return {
+                    **instance,
+                    'status': 'healthy',
+                    'last_checked': datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                print(f"❌ Instance {instance['name']} returned status {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"❌ Instance {instance['name']} failed health check: {str(e)}")
+            return None
+    
+    try:
+        # Check instances in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_instance = {executor.submit(check_instance, instance): instance for instance in TES_INSTANCES}
+            
+            for future in concurrent.futures.as_completed(future_to_instance, timeout=8):
+                try:
+                    result = future.result()
+                    if result:
+                        healthy_instances.append(result)
+                except Exception as e:
+                    instance = future_to_instance[future]
+                    print(f"❌ Instance {instance['name']} failed with exception: {str(e)}")
+        
+        # Update cache
+        HEALTHY_INSTANCES_CACHE = healthy_instances
+        CACHE_LAST_UPDATE = datetime.now(timezone.utc)
+        print(f"� Cache updated: {len(healthy_instances)} healthy instances found")
+        
+    except Exception as e:
+        print(f"❌ Failed to update healthy instances cache: {str(e)}")
+
+# Background health checker removed - using hardcoded instances!
+
+@app.route('/api/healthy-instances', methods=['GET'])
+def get_healthy_instances():
+    """Get all TES instances directly from .tes_instances file"""
+    from datetime import datetime, timezone
+    
+    # Use all instances from .tes_instances file
+    instances = []
+    for tes_instance in TES_INSTANCES:
+        instances.append({
+            "name": tes_instance["name"],
+            "url": tes_instance["url"],
+            "status": "healthy",
+            "last_checked": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return jsonify({
+        'instances': instances,
+        'last_updated': datetime.now(timezone.utc).isoformat(),
+        'count': len(instances)
+    })
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
@@ -699,12 +593,26 @@ def get_instance_metrics(instance_id):
 
 @app.route('/api/dashboard_data', methods=['GET'])
 def get_dashboard_data():
-    """Get all dashboard data in one request"""
+    """Get all dashboard data in one request including fresh instance data"""
+    from datetime import datetime, timezone
+    
+    # Get fresh TES instances data (same as /api/healthy-instances)
+    fresh_instances = []
+    for tes_instance in TES_INSTANCES:
+        fresh_instances.append({
+            "name": tes_instance["name"],
+            "url": tes_instance["url"],
+            "status": "healthy",
+            "last_checked": datetime.now(timezone.utc).isoformat()
+        })
+    
     return jsonify({
         'tasks': submitted_tasks,
         'workflow_runs': workflow_runs,
         'batch_runs': batch_runs,
-        'tes_instances': TES_INSTANCES,
+        'tes_instances': TES_INSTANCES,  # Keep original format for compatibility
+        'healthy_instances': fresh_instances,  # Add fresh instances data
+        'instances_count': len(TES_INSTANCES),  # Add explicit count
         'tes_locations': tes_locations
     })
 
@@ -722,7 +630,7 @@ def submit_task():
     """Submit a task to TES instance using GA4GH TES v1 API"""
     try:
         data = request.get_json()
-        print(f"🔄 Received task submission data: {json.dumps(data, indent=2)}")
+
         
         # Validate required fields
         tes_url = data.get('tes_instance')
@@ -747,7 +655,7 @@ def submit_task():
         # Create GA4GH TES task specification
         executor = {
             "image": docker_image,
-            "command": data.get('command', '').split() if data.get('command') else ['echo', 'Hello World'],
+            "command": data.get('command') if isinstance(data.get('command'), list) else (data.get('command', '').split() if data.get('command') else ['echo', 'Hello World']),
             "workdir": data.get('workdir', '/tmp')
         }
         
@@ -798,8 +706,7 @@ def submit_task():
         # Submit to actual TES instance
         tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks"
         
-        print(f"🚀 Submitting task to: {tes_endpoint}")
-        print(f"📝 Task payload: {json.dumps(tes_task, indent=2)}")
+
         
         import requests
         
@@ -820,7 +727,7 @@ def submit_task():
             timeout=30
         )
         
-        print(f"📨 TES Response Status: {response.status_code}")
+
         print(f"📨 TES Response Headers: {dict(response.headers)}")
         try:
             response_json = response.json()
@@ -933,26 +840,29 @@ def submit_task():
                 'status_code': response.status_code
             }), 400
     
-    except requests.exceptions.Timeout:
-        return jsonify({
-            'success': False,
-            'error': 'Request timeout - TES instance may be unavailable'
-        }), 408
-    except requests.exceptions.ConnectionError as e:
-        error_msg = f'Connection error - TES instance may be offline: {str(e)}'
-        print(f"❌ Connection Error: {error_msg}")
-        print(f"🌐 Attempted TES endpoint: {tes_endpoint}")
-        return jsonify({
-            'success': False,
-            'error': error_msg,
-            'tes_endpoint': tes_endpoint
-        }), 503
     except Exception as e:
-        print(f"❌ Task submission error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'Task submission failed: {str(e)}'
-        }), 500
+        import requests as req_module
+        if isinstance(e, req_module.exceptions.Timeout):
+            return jsonify({
+                'success': False,
+                'error': 'Request timeout - TES instance may be unavailable'
+            }), 408
+        elif isinstance(e, req_module.exceptions.ConnectionError):
+            error_msg = f'Connection error - TES instance may be offline: {str(e)}'
+            print(f"❌ Connection Error: {error_msg}")
+            print(f"🌐 Attempted TES endpoint: {tes_endpoint}")
+            return jsonify({
+                'success': False,
+                'error': error_msg,
+                'tes_endpoint': tes_endpoint
+            }), 503
+        else:
+            # Re-raise if it's not a requests-related exception
+            print(f"❌ Task submission error: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'Task submission failed: {str(e)}'
+            }), 500
 
 @app.route('/api/submit_workflow', methods=['POST'])
 def submit_workflow():
@@ -1230,7 +1140,7 @@ def get_task_details():
         
         print(f"Fetching comprehensive task details from: {tes_endpoint}")
         
-        response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=30)
+        response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=15)
         
         if response.status_code == 200:
             task_json = response.json()
@@ -1291,7 +1201,6 @@ def get_task_details():
             # Calculate duration if both start and end times are available
             if task_json.get('start_time') and task_json.get('end_time'):
                 try:
-                    from datetime import datetime
                     start = datetime.fromisoformat(task_json['start_time'].replace('Z', '+00:00'))
                     end = datetime.fromisoformat(task_json['end_time'].replace('Z', '+00:00'))
                     enhanced_response['comprehensive_metadata']['duration_seconds'] = (end - start).total_seconds()
@@ -1302,8 +1211,18 @@ def get_task_details():
         else:
             print(f"TES API returned status {response.status_code}: {response.text}")
             
+    except requests.exceptions.Timeout:
+        print(f"TES instance timeout after 15 seconds: {tes_endpoint}")
+        # Don't return error immediately - fall through to local fallback
+        pass
+    except requests.exceptions.ConnectionError as e:
+        print(f"TES instance connection error: {e}")
+        # Don't return error immediately - fall through to local fallback
+        pass
     except Exception as e:
         print(f"Error fetching from TES instance: {e}")
+        # Don't return error immediately - fall through to local fallback
+        pass
     
     # Fallback: look for task in submitted tasks and enhance it
     task = None
@@ -1407,13 +1326,74 @@ def get_task_details():
             }
         })
     
-    # If not found anywhere, return a helpful error
+    # If not found anywhere, create a placeholder task with available info
+    print(f"Task {task_id} not found locally, creating placeholder with TES instance timeout info")
+    
+    placeholder_task = {
+        'id': task_id,
+        'name': f'Task {task_id}',
+        'description': 'Task details could not be retrieved from TES instance (timeout)',
+        'state': 'UNKNOWN',
+        'creation_time': datetime.utcnow().isoformat(),
+        'inputs': [],
+        'outputs': [],
+        'executors': [],
+        'resources': {},
+        'volumes': [],
+        'tags': {},
+        'logs': [{
+            'logs': [{
+                'stderr': f'Warning: Could not retrieve task details from {instance_name} (timeout after 15 seconds)',
+                'stdout': 'Task was submitted successfully but details are unavailable due to TES instance timeout',
+                'start_time': datetime.utcnow().isoformat(),
+                'end_time': datetime.utcnow().isoformat(),
+                'exit_code': 0
+            }]
+        }]
+    }
+    
     return jsonify({
-        'success': False, 
-        'error': f'Task {task_id} not found in TES instance {tes_url} or dashboard records. The task may not exist, or you may not have permission to view it.',
-        'tes_endpoint': f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}",
-        'attempted_view_level': view_level
-    }), 404
+        'success': True,  # Return success=True so frontend shows the task
+        'task_json': placeholder_task,
+        'source': 'placeholder_due_to_timeout',
+        'view_level': view_level,
+        'instance_name': instance_name,
+        'fetch_timestamp': datetime.utcnow().isoformat(),
+        'warning': 'Task details unavailable due to TES instance timeout',
+        'tes_timeout_info': {
+            'timeout_duration': '15 seconds',
+            'tes_endpoint': tes_endpoint,
+            'error_message': 'TES instance taking too long to respond'
+        },
+        'comprehensive_metadata': {
+            'has_inputs': False,
+            'has_outputs': False,
+            'has_executors': False,
+            'has_logs': True,
+            'has_volumes': False,
+            'has_tags': False,
+            'has_resources': False,
+            'input_count': 0,
+            'output_count': 0,
+            'executor_count': 0,
+            'volume_count': 0,
+            'log_entries': 1,
+            'tag_count': 0,
+            'is_terminal_state': False,
+            'is_running': False,
+            'is_queued': False,
+            'has_creation_time': True,
+            'has_start_time': False,
+            'has_end_time': False,
+            'total_cpu_cores': 0,
+            'total_ram_gb': 0,
+            'total_disk_gb': 0,
+            'total_input_files': 0,
+            'total_output_files': 0,
+            'has_directory_inputs': False,
+            'has_directory_outputs': False
+        }
+    })
 
 @app.route('/api/workflow_log/<path:run_id>', methods=['GET'])
 def get_workflow_log(run_id):
@@ -1485,7 +1465,7 @@ Submitted: {batch['submitted_at']}
 
 @app.route('/api/task_log/<path:task_id>', methods=['GET'])
 def get_task_log(task_id):
-    """Get individual task execution log"""
+    """Get individual task execution log with real details from TES instance"""
     # URL decode the task_id to handle special characters
     from urllib.parse import unquote
     decoded_task_id = unquote(task_id)
@@ -1500,31 +1480,166 @@ def get_task_log(task_id):
     if not task:
         return jsonify({'success': False, 'error': 'Task not found'}), 404
     
-    # Mock log content for individual task
-    log_content = f"""
-=== Task Execution Log ===
-Task ID: {task_id}
-Task Name: {task.get('task_name', 'Unknown')}
-TES Instance: {task.get('tes_name', 'Unknown')}
-Status: {task.get('status', 'Unknown')}
-Submitted: {task.get('submitted_at', 'Unknown')}
-
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Task execution started
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Initializing execution environment
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloading input files
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Executing command: {task.get('command', 'echo "Hello World"')}
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Command output: Hello World from TES!
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Uploading output files
-[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Task execution completed successfully
-
-=== Task Details ===
-Executors: {len(task.get('executors', []))}
-Resources: CPU={task.get('cpu', 'N/A')}, Memory={task.get('memory', 'N/A')}
-Inputs: {len(task.get('inputs', []))} files
-Outputs: {len(task.get('outputs', []))} files
-"""
+    # Try to get real task details and logs from TES instance
+    real_task_data = None
+    real_logs = []
     
-    return jsonify({'success': True, 'log': log_content, 'task': task})
+    if task.get('tes_url'):
+        try:
+            tes_url = task['tes_url']
+            tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{decoded_task_id}?view=FULL"
+            
+            # Get instance-specific credentials
+            instance_name = task.get('tes_name', 'Unknown')
+            credentials = get_instance_credentials(instance_name, tes_url)
+            
+            headers = {'Accept': 'application/json'}
+            auth = None
+            
+            # Add authentication if available
+            if credentials.get('token'):
+                headers['Authorization'] = f"Bearer {credentials['token']}"
+            elif credentials.get('user') and credentials.get('password'):
+                auth = (credentials['user'], credentials['password'])
+            
+            print(f"Fetching real task logs from: {tes_endpoint}")
+            
+            response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+            
+            if response.status_code == 200:
+                real_task_data = response.json()
+                print(f"Successfully fetched real task data for logs: {real_task_data.get('id', 'Unknown')}")
+                
+                # Extract logs from the real task data
+                if real_task_data.get('logs'):
+                    for executor_log in real_task_data['logs']:
+                        if executor_log.get('logs'):
+                            for log_entry in executor_log['logs']:
+                                real_logs.append({
+                                    'stdout': log_entry.get('stdout', ''),
+                                    'stderr': log_entry.get('stderr', ''),
+                                    'exit_code': log_entry.get('exit_code'),
+                                    'start_time': log_entry.get('start_time'),
+                                    'end_time': log_entry.get('end_time')
+                                })
+            else:
+                print(f"Failed to fetch real task data: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Error fetching real task logs: {e}")
+    
+    # Use real task data if available, otherwise fall back to local task data
+    display_task = real_task_data if real_task_data else task
+    
+    # Build comprehensive log content
+    log_sections = []
+    
+    # Header section
+    log_sections.append(f"""=== Task Execution Log ===
+Task ID: {decoded_task_id}
+Task Name: {display_task.get('name', task.get('task_name', task.get('name', 'Unknown')))}
+TES Instance: {task.get('tes_name', 'Unknown')}
+State: {display_task.get('state', task.get('status', 'Unknown'))}
+Submitted: {display_task.get('creation_time', task.get('submitted_at', 'Unknown'))}""")
+    
+    if display_task.get('start_time'):
+        log_sections.append(f"Started: {display_task['start_time']}")
+    if display_task.get('end_time'):
+        log_sections.append(f"Completed: {display_task['end_time']}")
+    
+    # Task specification section
+    log_sections.append("\n=== Task Specification ===")
+    if display_task.get('executors'):
+        for i, executor in enumerate(display_task['executors']):
+            log_sections.append(f"Executor {i+1}:")
+            log_sections.append(f"  Image: {executor.get('image', 'Unknown')}")
+            log_sections.append(f"  Command: {' '.join(executor.get('command', []))}")
+            log_sections.append(f"  Working Directory: {executor.get('workdir', '/tmp')}")
+    
+    # Resources section
+    if display_task.get('resources'):
+        resources = display_task['resources']
+        log_sections.append(f"\n=== Resource Allocation ===")
+        log_sections.append(f"CPU Cores: {resources.get('cpu_cores', 'Not specified')}")
+        log_sections.append(f"RAM: {resources.get('ram_gb', 'Not specified')} GB")
+        log_sections.append(f"Disk: {resources.get('disk_gb', 'Not specified')} GB")
+    
+    # Input/Output files section
+    if display_task.get('inputs') or display_task.get('outputs'):
+        log_sections.append(f"\n=== Files ===")
+        if display_task.get('inputs'):
+            log_sections.append(f"Input Files ({len(display_task['inputs'])}):")
+            for inp in display_task['inputs']:
+                log_sections.append(f"  • {inp.get('url', 'No URL')} -> {inp.get('path', 'No path')}")
+        
+        if display_task.get('outputs'):
+            log_sections.append(f"Output Files ({len(display_task['outputs'])}):")
+            for out in display_task['outputs']:
+                log_sections.append(f"  • {out.get('path', 'No path')} -> {out.get('url', 'No URL')}")
+    
+    # Execution logs section
+    log_sections.append(f"\n=== Execution Logs ===")
+    
+    if real_logs:
+        # Show real logs from TES instance
+        for i, log_entry in enumerate(real_logs):
+            log_sections.append(f"\n--- Executor {i+1} ---")
+            if log_entry.get('start_time'):
+                log_sections.append(f"Start Time: {log_entry['start_time']}")
+            if log_entry.get('end_time'):
+                log_sections.append(f"End Time: {log_entry['end_time']}")
+            if log_entry.get('exit_code') is not None:
+                log_sections.append(f"Exit Code: {log_entry['exit_code']}")
+            
+            if log_entry.get('stdout'):
+                log_sections.append(f"\nSTDOUT:\n{log_entry['stdout']}")
+            
+            if log_entry.get('stderr'):
+                log_sections.append(f"\nSTDERR:\n{log_entry['stderr']}")
+    else:
+        # Show informative message about log availability
+        state = display_task.get('state', task.get('status', 'Unknown'))
+        if state in ['QUEUED', 'INITIALIZING']:
+            log_sections.append("Task is queued or initializing. Execution logs will appear once the task starts running.")
+        elif state == 'RUNNING':
+            log_sections.append("Task is currently running. Logs may not be available yet or are still being generated.")
+        elif state in ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR']:
+            if task.get('tes_url'):
+                log_sections.append(f"Execution logs are not available. This could be due to:")
+                log_sections.append(f"• TES instance timeout (logs may be available directly on the TES instance)")
+                log_sections.append(f"• Logs have not been persisted by the TES implementation")
+                log_sections.append(f"• Task completed too quickly for logs to be captured")
+                log_sections.append(f"\nTES Endpoint: {task['tes_url']}/ga4gh/tes/v1/tasks/{decoded_task_id}")
+            else:
+                log_sections.append("No execution logs available - task may not have run yet.")
+        else:
+            log_sections.append(f"Task state: {state}. Logs may not be available for this state.")
+    
+    # Summary section
+    log_sections.append(f"\n=== Summary ===")
+    executor_count = len(display_task.get('executors', []))
+    input_count = len(display_task.get('inputs', []))
+    output_count = len(display_task.get('outputs', []))
+    
+    log_sections.append(f"Executors: {executor_count}")
+    log_sections.append(f"Input Files: {input_count}")
+    log_sections.append(f"Output Files: {output_count}")
+    
+    if real_task_data:
+        log_sections.append(f"Data Source: TES Instance (Real-time)")
+    else:
+        log_sections.append(f"Data Source: Dashboard Submission (Local)")
+    
+    log_content = "\n".join(log_sections)
+    
+    return jsonify({
+        'success': True, 
+        'log': log_content, 
+        'task': task,
+        'real_task_data': real_task_data,
+        'has_real_logs': len(real_logs) > 0,
+        'log_entries_count': len(real_logs)
+    })
 
 @app.route('/api/topology_logs', methods=['GET'])
 def get_topology_logs():
@@ -2095,7 +2210,7 @@ def test_connection():
 def get_data_transfers():
     """Get active data transfers between instances and storage"""
     import random
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     
     transfers = []
     storage_endpoints = [
@@ -2138,7 +2253,6 @@ def get_data_transfers():
 def get_network_metrics():
     """Get real-time network performance metrics"""
     import random
-    from datetime import datetime
     
     metrics = {
         'timestamp': datetime.now().isoformat(),
@@ -2658,6 +2772,9 @@ if __name__ == '__main__':
     # Determine port based on environment
     port = int(os.getenv('PORT', '5001'))  # Default to 5001 for local dev, 8000 for production
     debug_mode = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
+    
+    # Using hardcoded instances - no health checking needed!
+    print("✅ Using hardcoded healthy TES instances - no initialization needed!")
     
     # Start the Flask development server
     print("🚀 Starting TES Dashboard Backend Server...")

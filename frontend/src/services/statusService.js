@@ -44,7 +44,7 @@ export const statusService = {
   // Get system topology logs
   getTopologyLogs: async () => {
     try {
-      const response = await apiClient.get('/api/topology_logs');
+      const response = await apiClient.get('/api/api/topology_logs');
       return response.data;
     } catch (error) {
       console.error('Error fetching topology logs:', error);

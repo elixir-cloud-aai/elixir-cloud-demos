@@ -5,7 +5,7 @@ export const taskService = {
   // Get task details with comprehensive information
   getTaskDetails: async (tesUrl, taskId, viewLevel = 'FULL') => {
     try {
-      const response = await api.get('/task_details', {
+      const response = await api.get('/api/task_details', {
         params: { 
           tes_url: tesUrl, 
           task_id: taskId,
@@ -24,7 +24,7 @@ export const taskService = {
     try {
       console.log('TaskService: Submitting task with data:', taskData);
       
-      const response = await api.post('/submit_task', taskData, {
+      const response = await api.post('/api/submit_task', taskData, {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -52,7 +52,7 @@ export const taskService = {
       formData.append('tes_url', tesUrl);
       formData.append('task_id', taskId);
       
-      const response = await api.post('/cancel_task', formData, {
+      const response = await api.post('/api/cancel_task', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -68,7 +68,7 @@ export const taskService = {
   listTasks: async () => {
     try {
       // Get tasks from dashboard data which includes submitted_tasks
-      const response = await api.get('/dashboard_data');
+      const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
       console.log('TaskService: Dashboard data received:', dashboardData);
@@ -114,7 +114,7 @@ export const taskService = {
   // Get service status
   getServiceStatus: async () => {
     try {
-      const response = await api.get('/status');
+      const response = await api.get('/api/status');
       return response.data;
     } catch (error) {
       console.error('Error fetching service status:', error);
@@ -125,7 +125,7 @@ export const taskService = {
   // Get dashboard data
   getDashboardData: async () => {
     try {
-      const response = await api.get('/dashboard_data');
+      const response = await api.get('/api/dashboard_data');
       return response.data;
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

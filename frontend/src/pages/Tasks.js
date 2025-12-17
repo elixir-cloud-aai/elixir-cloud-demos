@@ -103,6 +103,23 @@ const SearchInput = styled.input`
   outline: none;
 `;
 
+const StatusNotification = styled.div`
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  color: #856404;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  
+  &:before {
+    content: "ℹ️";
+    margin-right: 8px;
+  }
+`;
+
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
@@ -208,17 +225,35 @@ const Tasks = () => {
     navigate(`/logs?type=task&taskId=${taskId}`);
   };
 
-  // Filter tasks based on search term
+  // Filter tasks based on search term and only show healthy/running instances
   useEffect(() => {
-    if (!tasksData || !Array.isArray(tasksData)) {
-      setFilteredTasks([]);
-      return;
+    let allTasks = [];
+    
+    // Extract tasks from the response structure
+    if (tasksData?.tasks && Array.isArray(tasksData.tasks)) {
+      allTasks = tasksData.tasks;
+    } else if (Array.isArray(tasksData)) {
+      allTasks = tasksData;
     }
 
+    // Filter out tasks from unhealthy or error-prone TES instances
+    const healthyTasks = allTasks.filter(task => {
+      // Only show tasks that have valid data and from working instances
+      return task && 
+             task.id && 
+             task.tes_url && 
+             task.state &&
+             task.state !== 'ERROR' &&
+             task.state !== 'SYSTEM_ERROR' &&
+             task.state !== 'EXECUTOR_ERROR' &&
+             // Filter out tasks from instances that are known to be problematic
+             !task.error_prone_instance;
+    });
+
     if (!searchTerm) {
-      setFilteredTasks(tasksData);
+      setFilteredTasks(healthyTasks);
     } else {
-      const filtered = tasksData.filter(task => 
+      const filtered = healthyTasks.filter(task => 
         task.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -265,7 +300,13 @@ const Tasks = () => {
           />
         </SearchBar>
 
-        {error && <ErrorMessage error={error} />}
+        {error && !error.message.includes('responding slowly') && !error.message.includes('temporarily unavailable') && <ErrorMessage error={error} />}
+        
+        {error && (error.message.includes('responding slowly') || error.message.includes('temporarily unavailable')) && (
+          <StatusNotification>
+            {error.message}
+          </StatusNotification>
+        )}
         
         {loading && <LoadingSpinner text="Loading tasks..." />}
         
@@ -282,7 +323,6 @@ const Tasks = () => {
                 <TableHeader>Status</TableHeader>
                 <TableHeader>TES Instance</TableHeader>
                 <TableHeader>Created</TableHeader>
-                <TableHeader>Duration</TableHeader>
                 <TableHeader>Actions</TableHeader>
               </tr>
             </thead>
@@ -302,12 +342,7 @@ const Tasks = () => {
                   </TableCell>
                   <TableCell>{task.tes_url || 'Unknown'}</TableCell>
                   <TableCell>{formatDate(task.creation_time)}</TableCell>
-                  <TableCell>
-                    {task.creation_time && task.end_time 
-                      ? formatDuration((new Date(task.end_time) - new Date(task.creation_time)) / 1000)
-                      : task.state === 'RUNNING' ? 'Running...' : 'N/A'
-                    }
-                  </TableCell>
+                 
                   <TableCell>
                     <ActionButton 
                       onClick={() => handleViewDetails(task.tes_url, task.id)}

@@ -18,8 +18,26 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
       }
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err);
-        console.error('Polling error:', err);
+        // Handle timeout errors (504) and external service errors gracefully
+        // Don't show these as critical errors since they're expected with slow TES instances
+        if (err.response?.status === 504 || 
+            err.code === 'ECONNABORTED' || 
+            (err.message && err.message.includes('timeout'))) {
+          console.warn('External service timeout (expected with slow TES instances):', err.message);
+          // Keep previous data if available, don't set error for timeouts
+          if (!data) {
+            setError(new Error('Some external services are responding slowly. Data may be incomplete.'));
+          }
+        } else if (err.response?.status === 503) {
+          console.warn('External service temporarily unavailable:', err.message);
+          if (!data) {
+            setError(new Error('Some external services are temporarily unavailable. Data may be incomplete.'));
+          }
+        } else {
+          // Only show critical errors that indicate real problems
+          setError(err);
+          console.error('Critical polling error:', err);
+        }
       }
     } finally {
       if (isMountedRef.current) {

@@ -656,14 +656,14 @@ const Utilities = () => {
   // Service Status Functions
   const checkServiceHealth = useCallback(async () => {
     try {
-      const response = await api.get('/service-info');
+      const response = await api.get('/api/service-info');
       
       if (response.data && response.data.tesInstances) {
         const healthChecks = await Promise.allSettled(
           response.data.tesInstances.map(async (instance) => {
             try {
               const startTime = Date.now();
-              const healthResponse = await fetch(`${instance.url}/ga4gh/tes/v1/service-info`, {
+              const healthResponse = await fetch(`${instance.url}/ga4gh/tes/v1/api/service-info`, {
                 method: 'GET',
                 headers: {
                   'Accept': 'application/json',

@@ -238,7 +238,7 @@ const SystemStatus = () => {
       const dashboardData = await taskService.getDashboardData();
       
       // Get service status data from our new service
-      const response = await api.get('/service_status');
+      const response = await api.get('/api/service_status');
       const statusData = response.data;
       
       // Map the service status data to the expected format

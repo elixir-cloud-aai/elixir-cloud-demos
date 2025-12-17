@@ -5,11 +5,21 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { workflowService } from '../services/workflowService';
 import { formatDateTime, formatDuration } from '../utils/formatters';
-import { TES_INSTANCES } from '../utils/constants';
+import useInstances from '../hooks/useInstances';
 
 const WorkflowsContainer = styled.div`
-  padding: 2rem;
-  max-width: 1400px;
+  paddi          <Select
+            value={cwlForm.tesUrl}
+            onChange={(e) => setCwlForm({ ...cwlForm, tesUrl: e.target.value })}
+            required
+          >
+            <option value="">Select Healthy TES Instance</option>
+            {instances.map((instance, idx) => (
+              <option key={idx} value={instance.url}>
+                {instance.name} ✅ ({instance.url})
+              </option>
+            ))}
+          </Select>max-width: 1400px;
   margin: 0 auto;
 `;
 
@@ -346,6 +356,9 @@ const Workflows = () => {
   const [error, setError] = useState('');
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(true);
+
+  // Use healthy instances hook
+  const { instances, loading: instancesLoading } = useInstances();
   
   // Log modal state
   const [showLogModal, setShowLogModal] = useState(false);
@@ -396,6 +409,14 @@ const Workflows = () => {
       setWorkflowRuns(runs);
     } catch (err) {
       console.error('Error loading workflow runs:', err);
+      // Don't show errors for timeout/connectivity issues - just continue with empty data
+      if (err.response?.status === 504 || err.response?.status === 503 || err.message?.includes('timeout')) {
+        console.warn('External services slow/unavailable - showing empty workflow runs');
+        setWorkflowRuns([]);
+      } else {
+        // Only set error for critical issues
+        console.error('Critical workflow loading error:', err);
+      }
     } finally {
       setRunsLoading(false);
     }
@@ -547,10 +568,10 @@ const Workflows = () => {
             onChange={(e) => setCwlForm({ ...cwlForm, tesInstance: e.target.value })}
             required
           >
-            <option value="">Select TES Instance</option>
-            {TES_INSTANCES.map((instance, idx) => (
+            <option value="">Select Healthy TES Instance</option>
+            {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ({instance.url})
+                {instance.name} ✅ ({instance.url})
               </option>
             ))}
           </Select>
@@ -614,10 +635,10 @@ const Workflows = () => {
             onChange={(e) => setNextflowForm({ ...nextflowForm, tesInstance: e.target.value })}
             required
           >
-            <option value="">Select TES Instance</option>
-            {TES_INSTANCES.map((instance, idx) => (
+            <option value="">Select Healthy TES Instance</option>
+            {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ({instance.url})
+                {instance.name} ✅ ({instance.url})
               </option>
             ))}
           </Select>
@@ -689,10 +710,10 @@ const Workflows = () => {
             onChange={(e) => setSnakemakeForm({ ...snakemakeForm, tesInstance: e.target.value })}
             required
           >
-            <option value="">Select TES Instance</option>
-            {TES_INSTANCES.map((instance, idx) => (
+            <option value="">Select Healthy TES Instance</option>
+            {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ({instance.url})
+                {instance.name} ✅ ({instance.url})
               </option>
             ))}
           </Select>

@@ -75,7 +75,7 @@ function App() {
                 <Route path="/submit-task" element={<SubmitTask />} />
                 <Route path="/workflows" element={<Workflows />} />
                 <Route path="/batch" element={<BatchProcessing />} />
-                <Route path="/service-info" element={<ServiceInfo />} />
+                <Route path="/api/service-info" element={<ServiceInfo />} />
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/topology" element={<NetworkTopology />} />
                 <Route path="/utilities" element={<Utilities />} />

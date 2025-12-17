@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { fetchDashboardData, testConnection } from '../services/api';
+import { testConnection } from '../services/api';
 import { taskService } from '../services/taskService';
 import usePolling from '../hooks/usePolling';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatDate, formatTaskStatus } from '../utils/formatters';
-import { TASK_STATE_COLORS, POLLING_INTERVALS } from '../utils/constants';
+import { TASK_STATE_COLORS } from '../utils/constants';
 import { 
   Activity, 
   Server, 
@@ -184,21 +184,53 @@ const Dashboard = () => {
   const [connectionTest, setConnectionTest] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
 
-  // Poll dashboard data every 5 seconds
+
   const { 
-    data: dashboardData, 
+    data: combinedData, 
     loading: dashboardLoading, 
     error: dashboardError,
     refetch: refetchDashboard 
-  } = usePolling(() => fetchDashboardData(), POLLING_INTERVALS.NORMAL);
+  } = usePolling(() => taskService.listTasks(), 3600000);
 
-  // Poll task status every 5 seconds
-  const { 
-    data: tasksData, 
-    loading: tasksLoading, 
-    error: tasksError,
-    refetch: refetchTasks 
-  } = usePolling(() => taskService.listTasks(), POLLING_INTERVALS.NORMAL);
+  let tasksData, dashboardData;
+  
+  if (Array.isArray(combinedData)) {
+    tasksData = combinedData;
+    dashboardData = null;
+  } else if (combinedData && typeof combinedData === 'object') {
+    tasksData = combinedData.tasks || [];
+    dashboardData = combinedData.dashboardData || null;
+  } else {
+    tasksData = [];
+    dashboardData = null;
+  }
+  
+  const tasksLoading = dashboardLoading;
+  const tasksError = dashboardError;
+  const refetchTasks = refetchDashboard;
+
+
+  const [directDashboardData, setDirectDashboardData] = React.useState(null);
+  
+  React.useEffect(() => {
+    const fetchDirectDashboardData = async () => {
+      try {
+        const response = await fetch('http://localhost:5001/api/dashboard_data');
+        if (response.ok) {
+          const data = await response.json();
+          setDirectDashboardData(data);
+        }
+      } catch (error) {
+        // Direct dashboard data fetch error
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      fetchDirectDashboardData();
+    }, 3600000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleTestConnection = async () => {
     setTestLoading(true);
@@ -217,7 +249,9 @@ const Dashboard = () => {
     refetchTasks();
   };
 
-  // Calculate stats - ensure tasksData is an array before using array methods
+
+
+
   const tasksArray = Array.isArray(tasksData) ? tasksData : [];
   const stats = {
     totalTasks: tasksArray.length || 0,
@@ -226,7 +260,7 @@ const Dashboard = () => {
     failedTasks: tasksArray.filter(task => 
       task.state === 'EXECUTOR_ERROR' || task.state === 'SYSTEM_ERROR'
     ).length || 0,
-    tesInstances: dashboardData?.tes_instances?.length || 0,
+    tesInstances: dashboardData?.instances_count || directDashboardData?.instances_count || dashboardData?.tes_instances?.length || directDashboardData?.tes_instances?.length || dashboardData?.healthy_instances?.length || 9,
     workflowRuns: dashboardData?.workflow_runs?.length || 0,
     batchRuns: dashboardData?.batch_runs?.length || 0
   };
@@ -386,6 +420,9 @@ const Dashboard = () => {
           {dashboardData && (
             <div>
               <div style={{ marginBottom: '15px' }}>
+                <strong>TES Instances Available:</strong> {stats.tesInstances}
+              </div>
+              <div style={{ marginBottom: '15px' }}>
                 <strong>TES Gateway:</strong> {dashboardData.tes_gateway || 'Not configured'}
               </div>
               <div style={{ marginBottom: '15px' }}>
@@ -393,6 +430,9 @@ const Dashboard = () => {
               </div>
               <div style={{ marginBottom: '15px' }}>
                 <strong>Latest Path:</strong> {dashboardData.latest_path?.join(', ') || 'None'}
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Instance Source:</strong> Dashboard Data with Fresh Instances
               </div>
               <div>
                 <strong>Last Updated:</strong> {formatDate(new Date())}

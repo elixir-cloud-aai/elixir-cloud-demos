@@ -282,7 +282,7 @@ const ServiceStatus = () => {
       setLoading(true);
       setError(null);
       console.log('Fetching service status from API service');
-      const response = await api.get('/service_status');
+      const response = await api.get('/api/service_status');
       setStatusData(response.data);
       setLastUpdated(new Date().toISOString());
     } catch (err) {

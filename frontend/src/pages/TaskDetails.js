@@ -173,7 +173,7 @@ const StatsCard = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 15px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #343a40;
   color: white;
   padding: 20px;
   border-radius: 12px;
@@ -492,14 +492,6 @@ const TaskDetails = () => {
             <InfoRow>
               <InfoLabel>Creation Time:</InfoLabel>
               <InfoValue>{formatDate(taskDetails.task_json?.creation_time || taskDetails.task?.submitted_at || taskDetails.task?.creation_time) || 'N/A'}</InfoValue>
-            </InfoRow>
-            <InfoRow>
-              <InfoLabel>Start Time:</InfoLabel>
-              <InfoValue>{formatDate(taskDetails.task_json?.start_time || taskDetails.task?.start_time) || 'Not started'}</InfoValue>
-            </InfoRow>
-            <InfoRow>
-              <InfoLabel>End Time:</InfoLabel>
-              <InfoValue>{formatDate(taskDetails.task_json?.end_time || taskDetails.task?.end_time) || 'Not finished'}</InfoValue>
             </InfoRow>
             {taskDetails.comprehensive_metadata?.duration_seconds && (
               <InfoRow>

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import api, { fetchDashboardData, testConnection } from '../services/api';
+import { testConnection } from '../services/api';
 import { taskService } from '../services/taskService';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
-import { TES_INSTANCES } from '../utils/constants';
-import { ArrowLeft, Play } from 'lucide-react';
+import useInstances from '../hooks/useInstances';
+import { ArrowLeft, Play, Zap, RefreshCw } from 'lucide-react';
 
 const PageContainer = styled.div`
   padding: 20px;
@@ -110,7 +110,10 @@ const ButtonGroup = styled.div`
 `;
 
 const Button = styled.button`
-  background: ${props => props.variant === 'primary' ? '#007bff' : '#6c757d'};
+  background: ${props => 
+    props.variant === 'primary' ? '#007bff' : 
+    props.variant === 'demo' ? '#28a745' :
+    '#6c757d'};
   color: white;
   border: none;
   border-radius: 8px;
@@ -129,6 +132,41 @@ const Button = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
   }
+`;
+
+const DemoButtonGroup = styled.div`
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+`;
+
+const DemoTitle = styled.h3`
+  margin: 0 0 10px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+`;
+
+const DemoDescription = styled.p`
+  margin: 0 0 15px 0;
+  color: #6c757d;
+  font-size: 14px;
+  line-height: 1.5;
+`;
+
+const StatusNotification = styled.div`
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+  color: #856404;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 `;
 
 const HelpText = styled.small`
@@ -152,22 +190,24 @@ const SubmitTask = () => {
     disk_gb: '10',
     description: ''
   });
-  const [tesInstances, setTesInstances] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
 
-  useEffect(() => {
-    loadTesInstances();
-  }, []);
+  // Use simple instances hook
+  const { 
+    instances, 
+    loading: instancesLoading, 
+    error: instancesError,
+    refresh: refreshInstances 
+  } = useInstances();
 
   const handleTestConnection = async () => {
     try {
       setTestingConnection(true);
       setError(null);
       
-      console.log('Testing connection to backend...');
+
       
       // Test with fetch first
       const fetchResponse = await fetch('http://localhost:5001/api/test_connection', {
@@ -195,99 +235,75 @@ const SubmitTask = () => {
     }
   };
 
-  const loadTesInstances = async () => {
-    try {
-      setLoading(true);
-      
-      // WORKAROUND: Use root API endpoint that works until proxy is fixed
-      let instances = [];
-      
-      try {
-        // Try to get embedded data from root endpoint (workaround)
-        const rootResponse = await api.get('/');
-        console.log('🔄 Using workaround: loading instances from root endpoint');
-        
-        if (rootResponse.data?.workaround_data?.nodes) {
-          const nodes = rootResponse.data.workaround_data.nodes.map(node => ({
-            name: node.name,
-            url: node.url,
-            id: node.id
-          }));
-          instances = [...instances, ...nodes];
-          console.log('✅ Loaded instances from workaround data:', instances);
-        }
-        
-        if (rootResponse.data?.workaround_data?.instances) {
-          instances = [...instances, ...rootResponse.data.workaround_data.instances];
-        }
-        
-      } catch (workaroundError) {
-        console.warn('Workaround failed, trying regular endpoints:', workaroundError);
-        
-        // Fallback to regular API calls
-        const [dashboardData, instancesData, nodesData] = await Promise.allSettled([
-          fetchDashboardData(),
-          api.get('/instances'),
-          api.get('/nodes')
-        ]);
-        
-        // Debug API responses
-        console.log('API Responses:', {
-          dashboardData: dashboardData.status === 'fulfilled' ? 'success' : dashboardData.reason?.message || 'failed',
-          instancesData: instancesData.status === 'fulfilled' ? 'success' : instancesData.reason?.message || 'failed', 
-          nodesData: nodesData.status === 'fulfilled' ? 'success' : nodesData.reason?.message || 'failed'
-        });
-        
-        // Add instances from dashboard data
-        if (dashboardData.status === 'fulfilled' && dashboardData.value?.tes_instances) {
-          console.log('Adding instances from dashboard_data:', dashboardData.value.tes_instances);
-          instances = [...instances, ...dashboardData.value.tes_instances];
-        }
-        
-        // Add instances from /instances endpoint
-        if (instancesData.status === 'fulfilled' && Array.isArray(instancesData.value?.data)) {
-          console.log('Adding instances from /instances:', instancesData.value.data);
-          instances = [...instances, ...instancesData.value.data];
-        }
-        
-        // Add instances from /nodes endpoint
-        if (nodesData.status === 'fulfilled' && nodesData.value?.data?.nodes) {
-          console.log('Adding instances from /nodes:', nodesData.value.data.nodes);
-          const nodes = nodesData.value.data.nodes.map(node => ({
-            name: node.name,
-            url: node.url,
-            id: node.id
-          }));
-          instances = [...instances, ...nodes];
-        }
-      }
-      
-      // Fallback: Use static constants if no instances loaded from API
-      if (instances.length === 0) {
-        console.log('🔄 No instances from API, using fallback constants');
-        instances = [...TES_INSTANCES];
-        console.log('✅ Using static TES_INSTANCES as fallback:', instances);
-      }
-      
-      // Remove duplicates by URL
-      const uniqueInstances = instances.filter((instance, index, self) => 
-        index === self.findIndex(i => i.url === instance.url)
-      );
-      
-      console.log(`📊 Final loaded TES instances (${uniqueInstances.length}):`, uniqueInstances);
-      setTesInstances(uniqueInstances);
-      
-    } catch (err) {
-      console.error('Error loading TES instances:', err);
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Removed old loadTesInstances function - now using useHealthyInstances hook
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Demo task configurations with working values
+  const getDemoTaskData = (demoType = 'basic') => {
+    // Get the first available healthy TES instance, or use a default one
+    const defaultTesInstance = instances.length > 0 
+      ? instances[0].url 
+      : 'https://csc-tesk-noauth.rahtiapp.fi/v1/tasks';
+    
+    const demoTasks = {
+      basic: {
+        tes_instance: defaultTesInstance,
+        task_name: 'Demo Hello World Task',
+        docker_image: 'ubuntu:20.04',
+        command: 'echo "Hello from TES Demo Task!" && echo "Current time: $(date)" && echo "System info: $(uname -a)" && echo "Task completed successfully"',
+        input_url: '',
+        output_url: '',
+        cpu_cores: '1',
+        ram_gb: '1',
+        disk_gb: '5',
+        description: 'A simple demo task that prints system information and a hello message. Safe to run and completes quickly for testing purposes.'
+      },
+      python: {
+        tes_instance: defaultTesInstance,
+        task_name: 'Demo Python Script Task',
+        docker_image: 'python:3.9-slim',
+        command: 'python3 -c "import sys; import datetime; print(f\'Hello from Python {sys.version}\'); print(f\'Current time: {datetime.datetime.now()}\'); print(\'Demo task completed successfully!\')"',
+        input_url: '',
+        output_url: '',
+        cpu_cores: '1',
+        ram_gb: '1',
+        disk_gb: '5',
+        description: 'A Python demo task that prints version info and timestamp using a Python container.'
+      },
+      fileops: {
+        tes_instance: defaultTesInstance,
+        task_name: 'Demo File Operations Task',
+        docker_image: 'ubuntu:20.04',
+        command: 'echo "Creating demo files..." && echo "Hello World" > /tmp/output.txt && echo "File contents:" && cat /tmp/output.txt && ls -la /tmp/',
+        input_url: '',
+        output_url: '',
+        cpu_cores: '1',
+        ram_gb: '1',
+        disk_gb: '5',
+        description: 'A demo task that creates and reads files, demonstrating basic file operations within the container.'
+      }
+    };
+    
+    return demoTasks[demoType] || demoTasks.basic;
+  };
+
+  const handleRunDemo = (demoType = 'basic') => {
+    const demoData = getDemoTaskData(demoType);
+    setFormData(demoData);
+    setError(null); // Clear any existing errors
+    
+    // Show a confirmation message
+    const taskNames = {
+      basic: 'Basic Hello World',
+      python: 'Python Script',
+      fileops: 'File Operations'
+    };
+    
+    alert(`${taskNames[demoType] || 'Demo'} task data loaded! Review the form and click "Submit Task" when ready.`);
   };
 
   const handleSubmit = async (e) => {
@@ -346,10 +362,10 @@ const SubmitTask = () => {
     }
   };
 
-  if (loading) {
+  if (instancesLoading) {
     return (
       <PageContainer>
-        <LoadingSpinner text="Loading TES instances..." />
+        <LoadingSpinner text="Loading healthy TES instances..." />
       </PageContainer>
     );
   }
@@ -364,7 +380,39 @@ const SubmitTask = () => {
       <FormCard>
         <Title>Submit New Task</Title>
         
+        <DemoButtonGroup>
+          <DemoTitle>🚀 Quick Start Demo Tasks</DemoTitle>
+          <DemoDescription>
+            New to TES? Try one of our demo tasks! These will auto-populate all fields with safe, working examples that complete quickly.
+          </DemoDescription>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <Button type="button" variant="demo" onClick={() => handleRunDemo('basic')}>
+              <Zap size={16} style={{ marginRight: '8px' }} />
+              Basic Hello World
+            </Button>
+            <Button type="button" variant="demo" onClick={() => handleRunDemo('python')}>
+              <Zap size={16} style={{ marginRight: '8px' }} />
+              Python Script
+            </Button>
+            <Button type="button" variant="demo" onClick={() => handleRunDemo('fileops')}>
+              <Zap size={16} style={{ marginRight: '8px' }} />
+              File Operations
+            </Button>
+          </div>
+        </DemoButtonGroup>
+        
         {error && <ErrorMessage error={error} />}
+        {instancesError && <ErrorMessage error={instancesError} />}
+        
+        {instances.length === 0 && !instancesLoading && (
+          <StatusNotification>
+            ⚠️ No healthy TES instances found. 
+            <Button type="button" variant="demo" onClick={refreshInstances} style={{marginLeft: '10px', padding: '5px 10px'}}>
+              <RefreshCw size={14} style={{ marginRight: '5px' }} />
+              Refresh Instances
+            </Button>
+          </StatusNotification>
+        )}
         
         <form onSubmit={handleSubmit}>
           <FormGroup>
@@ -377,9 +425,9 @@ const SubmitTask = () => {
               required
             >
               <option value="">Select TES Instance</option>
-              {tesInstances.map((instance, index) => (
+              {instances.map((instance, index) => (
                 <option key={index} value={instance.url}>
-                  {instance.name}
+                  {instance.name} 
                 </option>
               ))}
             </Select>

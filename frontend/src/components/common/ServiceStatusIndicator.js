@@ -97,7 +97,7 @@ const ServiceStatusIndicator = ({
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await api.get('/service_status');
+        const response = await api.get('/api/service_status');
         const data = response.data;
         // Extract summary data from the full response
         const summaryData = {

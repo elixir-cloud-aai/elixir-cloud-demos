@@ -16,7 +16,7 @@ export const batchService = {
         formData.append('smk_dir', batchData.smkDir);
       }
       
-      const response = await api.post('/batch_snakemake', formData, {
+      const response = await api.post('/api/batch_snakemake', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -43,7 +43,7 @@ export const batchService = {
       }
       formData.append('nextflow_params', batchData.nextflowParams || '{}');
       
-      const response = await api.post('/batch_nextflow', formData, {
+      const response = await api.post('/api/batch_nextflow', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -69,7 +69,7 @@ export const batchService = {
         formData.append('inputs_file', batchData.inputsFile);
       }
       
-      const response = await api.post('/batch_cwl', formData, {
+      const response = await api.post('/api/batch_cwl', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -122,7 +122,7 @@ export const batchService = {
   // Get all batch runs
   getBatchRuns: async () => {
     try {
-      const response = await api.get('/batch_runs');
+      const response = await api.get('/api/batch_runs');
       return response.data;
     } catch (error) {
       console.error('Error fetching batch runs:', error);

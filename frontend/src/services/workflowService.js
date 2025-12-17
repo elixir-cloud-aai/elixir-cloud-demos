@@ -14,7 +14,7 @@ export const workflowService = {
         }
       });
       
-      const response = await api.post('/submit_workflow', formData, {
+      const response = await api.post('/api/submit_workflow', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -47,7 +47,7 @@ export const workflowService = {
   // Get latest workflow status
   getLatestWorkflowStatus: async () => {
     try {
-      const response = await api.get('/latest_workflow_status');
+      const response = await api.get('/api/latest_workflow_status');
       return response.data;
     } catch (error) {
       console.error('Error fetching latest workflow status:', error);
@@ -58,7 +58,7 @@ export const workflowService = {
   // Get workflow runs
   getWorkflowRuns: async () => {
     try {
-      const response = await api.get('/dashboard_data');
+      const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
       // Return workflow runs from dashboard data
