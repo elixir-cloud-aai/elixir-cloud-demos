@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 import asyncio
 import functools
+import threading
 
 # Import middleware system
 try:
@@ -148,8 +149,8 @@ def load_tes_location_data():
     # Load location data from JSON if available
     location_map = {}
     try:
-        if TES_LOCATIONS_FILE.exists():
-            with open(TES_LOCATIONS_FILE) as f:
+if TES_LOCATIONS_FILE.exists():
+    with open(TES_LOCATIONS_FILE) as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     for loc in data:
@@ -236,6 +237,128 @@ submitted_tasks = []
 workflow_runs = []
 batch_runs = load_batch_runs()
 save_batch_runs(batch_runs)
+
+# Task status update lock for thread safety
+task_update_lock = threading.Lock()
+task_updater_started = False
+
+def update_task_statuses():
+    """Background function to poll TES instances and update task statuses"""
+    terminal_states = ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED']
+    
+    while True:
+        try:
+            # Get tasks that need status updates (non-terminal states)
+            tasks_to_update = []
+            with task_update_lock:
+                for task in submitted_tasks:
+                    current_state = task.get('state') or task.get('status', 'UNKNOWN')
+                    if current_state not in terminal_states:
+                        tasks_to_update.append(task)
+            
+            if not tasks_to_update:
+                time.sleep(30)  # Wait 30 seconds if no tasks to update
+                continue
+            
+            print(f"🔄 Updating status for {len(tasks_to_update)} active tasks...")
+            
+            # Update each task's status
+            updated_count = 0
+            for task in tasks_to_update:
+                task_id = task.get('task_id') or task.get('id')
+                tes_url = task.get('tes_url')
+                
+                if not task_id or not tes_url:
+                    continue
+                
+                try:
+                    # Get instance-specific credentials
+                    instance_name = task.get('tes_name', 'Unknown')
+                    credentials = get_instance_credentials(instance_name, tes_url)
+                    
+                    # Build request
+                    tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
+                    headers = {'Accept': 'application/json'}
+                    auth = None
+                    
+                    if credentials.get('token'):
+                        headers['Authorization'] = f"Bearer {credentials['token']}"
+                    elif credentials.get('user') and credentials.get('password'):
+                        auth = (credentials['user'], credentials['password'])
+                    
+                    # Fetch current task status from TES instance
+                    response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+                    
+                    if response.status_code == 200:
+                        task_data = response.json()
+                        new_state = task_data.get('state', 'UNKNOWN')
+                        
+                        # Update task if state changed
+                        with task_update_lock:
+                            # Find the task again (in case list was modified)
+                            for t in submitted_tasks:
+                                if (t.get('task_id') == task_id or t.get('id') == task_id) and t.get('tes_url') == tes_url:
+                                    old_state = t.get('state') or t.get('status', 'UNKNOWN')
+                                    
+                                    if new_state != old_state:
+                                        t['state'] = new_state
+                                        t['status'] = new_state  # Keep for backwards compatibility
+                                        
+                                        # Update timing information
+                                        if task_data.get('creation_time'):
+                                            t['creation_time'] = task_data['creation_time']
+                                        if task_data.get('start_time'):
+                                            t['start_time'] = task_data['start_time']
+                                        if task_data.get('end_time'):
+                                            t['end_time'] = task_data['end_time']
+                                        
+                                        # Update logs if available
+                                        if task_data.get('logs'):
+                                            t['logs'] = task_data['logs']
+                                        
+                                        print(f"✅ Updated task {task_id}: {old_state} → {new_state}")
+                                        updated_count += 1
+                                    
+                                    break
+                    elif response.status_code == 404:
+                        # Task not found - might have been deleted or never existed
+                        print(f"⚠️ Task {task_id} not found on TES instance {tes_url}")
+                    else:
+                        # Other error - log but don't fail
+                        print(f"⚠️ Failed to fetch task {task_id} status: HTTP {response.status_code}")
+                
+                except requests.exceptions.Timeout:
+                    print(f"⏱️ Timeout fetching task {task_id} status")
+                except requests.exceptions.ConnectionError as e:
+                    print(f"🔌 Connection error fetching task {task_id} status: {str(e)[:100]}")
+                except Exception as e:
+                    print(f"❌ Error updating task {task_id}: {str(e)[:100]}")
+            
+            if updated_count > 0:
+                print(f"✅ Updated {updated_count} task statuses")
+            
+            # Wait before next update cycle (30 seconds)
+            time.sleep(30)
+            
+        except Exception as e:
+            print(f"❌ Error in task status update loop: {str(e)}")
+            time.sleep(60)  # Wait longer on error
+
+def start_task_status_updater():
+    """Start the background thread for task status updates"""
+    global task_updater_started
+    if task_updater_started:
+        return None
+    
+    updater_thread = threading.Thread(target=update_task_statuses, daemon=True)
+    updater_thread.start()
+    task_updater_started = True
+    print("🔄 Started background task status updater thread")
+    return updater_thread
+
+# Start the task status updater when the module is imported (works for both dev and production)
+# This ensures it starts even when using WSGI servers like gunicorn
+start_task_status_updater()
 
 # Global variables for workflow status
 current_workflow_step = 0
@@ -491,7 +614,7 @@ def tes_locations():
         try:
             tes_base_url = instance.get("url", "").rstrip("/")
             if not tes_base_url:
-                return {**instance, "status": "unreachable"}
+            return {**instance, "status": "unreachable"}
 
             start_time = time.time()
             r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
@@ -645,14 +768,14 @@ def get_service_info():
             }), 503
         except Exception as e:
             print(f"Failed to get real service info from {tes_url}: {e}")
-            return jsonify({
+        return jsonify({
                 'error': f'Unexpected error: {str(e)}',
                 'error_code': 'UNKNOWN_ERROR',
                 'error_type': 'unknown_error',
                 'message': 'Unexpected error occurred',
                 'reason': 'An unexpected error occurred while connecting to the TES instance',
                 'tes_url': tes_url
-            }), 503
+        }), 503
         
     except Exception as e:
         return jsonify({
@@ -1277,13 +1400,13 @@ def submit_task():
             }), error_info['http_status']
         
         # Fallback (should not reach here)
-        print(f"❌ Task submission error: {str(e)}")
-        return jsonify({
-            'success': False,
+            print(f"❌ Task submission error: {str(e)}")
+            return jsonify({
+                'success': False,
             'error': f'Task submission failed: {str(e)}',
             'error_type': 'unknown_error',
             'error_code': 'UNKNOWN_ERROR'
-        }), 500
+            }), 500
 
 @app.route('/api/submit_workflow', methods=['POST'])
 def submit_workflow():
@@ -1818,9 +1941,10 @@ def get_task_details():
 
 @app.route('/api/workflow_log/<path:run_id>', methods=['GET'])
 def get_workflow_log(run_id):
-    """Get workflow execution log"""
+    """Get workflow execution log with real task logs"""
     # URL decode the run_id to handle special characters
     from urllib.parse import unquote
+    from datetime import datetime, timedelta
     decoded_run_id = unquote(run_id)
     
     # Find workflow run
@@ -1833,56 +1957,247 @@ def get_workflow_log(run_id):
     if not workflow:
         return jsonify({'success': False, 'error': 'Workflow not found'}), 404
     
-    # Mock log content
-    log_content = f"""
-=== {workflow['type'].upper()} Workflow Log ===
-Run ID: {run_id}
-TES Instance: {workflow['tes_name']}
-Status: {workflow['status']}
-Submitted: {workflow['submitted_at']}
-
-[2024-01-01 10:00:00] Workflow started
-[2024-01-01 10:00:01] Preparing execution environment
-[2024-01-01 10:00:02] Executing workflow steps
-[2024-01-01 10:00:03] Workflow completed successfully
-"""
+    # Build log content with real information
+    log_sections = []
     
-    return jsonify({'success': True, 'log': log_content, 'workflow': workflow})
+    # Header section
+    log_sections.append(f"""=== {workflow['type'].upper()} Workflow Log ===
+Run ID: {decoded_run_id}
+TES Instance: {workflow['tes_name']}
+TES URL: {workflow.get('tes_url', 'Unknown')}
+Status: {workflow['status']}
+Submitted: {workflow['submitted_at']}""")
+    
+    # Find related tasks for this workflow
+    workflow_tes_url = workflow.get('tes_url', '').rstrip('/')
+    workflow_submitted_time = workflow.get('submitted_at', '')
+    
+    # Find tasks submitted to the same TES instance around the same time
+    related_tasks = []
+    if workflow_tes_url and workflow_submitted_time:
+        try:
+            workflow_time = datetime.fromisoformat(workflow_submitted_time.replace('Z', '+00:00'))
+            time_window_start = workflow_time - timedelta(minutes=5)
+            time_window_end = workflow_time + timedelta(hours=24)
+            
+            for task in submitted_tasks:
+                task_tes_url = task.get('tes_url', '').rstrip('/')
+                task_submitted = task.get('submitted_at') or task.get('creation_time', '')
+                
+                if task_tes_url == workflow_tes_url and task_submitted:
+                    try:
+                        task_time = datetime.fromisoformat(task_submitted.replace('Z', '+00:00'))
+                        if time_window_start <= task_time <= time_window_end:
+                            related_tasks.append(task)
+                    except:
+                        pass
+        except Exception as e:
+            print(f"Error matching tasks to workflow: {e}")
+    
+    # Add workflow metadata
+    if workflow.get('files'):
+        log_sections.append(f"\n=== Workflow Files ===")
+        for file_info in workflow['files']:
+            log_sections.append(f"  • {file_info.get('filename', 'Unknown')}")
+    
+    # Add related tasks information
+    if related_tasks:
+        log_sections.append(f"\n=== Related Tasks ({len(related_tasks)} found) ===")
+        for i, task in enumerate(related_tasks, 1):
+            task_id = task.get('task_id') or task.get('id', 'Unknown')
+            task_name = task.get('task_name') or task.get('name', 'Unknown')
+            task_state = task.get('state') or task.get('status', 'Unknown')
+            log_sections.append(f"\nTask {i}: {task_name}")
+            log_sections.append(f"  Task ID: {task_id}")
+            log_sections.append(f"  State: {task_state}")
+            log_sections.append(f"  Submitted: {task.get('submitted_at') or task.get('creation_time', 'Unknown')}")
+            
+            # Try to fetch real logs from this task
+            if task.get('tes_url') and task_id:
+                try:
+                    tes_url = task['tes_url'].rstrip('/')
+                    tes_endpoint = f"{tes_url}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
+                    
+                    instance_name = task.get('tes_name', 'Unknown')
+                    credentials = get_instance_credentials(instance_name, tes_url)
+                    
+                    headers = {'Accept': 'application/json'}
+                    auth = None
+                    if credentials.get('token'):
+                        headers['Authorization'] = f"Bearer {credentials['token']}"
+                    elif credentials.get('user') and credentials.get('password'):
+                        auth = (credentials['user'], credentials['password'])
+                    
+                    response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+                    if response.status_code == 200:
+                        task_data = response.json()
+                        if task_data.get('logs'):
+                            log_sections.append(f"  Execution Logs:")
+                            for executor_log in task_data['logs']:
+                                if executor_log.get('logs'):
+                                    for log_entry in executor_log['logs']:
+                                        if log_entry.get('stdout'):
+                                            log_sections.append(f"    STDOUT: {log_entry['stdout'][:200]}...")
+                                        if log_entry.get('stderr'):
+                                            log_sections.append(f"    STDERR: {log_entry['stderr'][:200]}...")
+                except Exception as e:
+                    log_sections.append(f"  Logs: Unable to fetch (Error: {str(e)[:100]})")
+    else:
+        log_sections.append(f"\n=== Task Information ===")
+        log_sections.append("No related tasks found. This workflow may not have submitted any tasks yet, or tasks were submitted to a different instance.")
+        log_sections.append(f"\nTo view task logs, check tasks submitted to: {workflow_tes_url}")
+    
+    log_content = '\n'.join(log_sections)
+    
+    return jsonify({'success': True, 'log': log_content, 'workflow': workflow, 'related_tasks_count': len(related_tasks)})
 
 @app.route('/api/batch_log/<path:run_id>', methods=['GET'])
 def get_batch_log(run_id):
-    """Get batch execution log"""
+    """Get batch execution log with real task logs"""
     # URL decode the run_id to handle special characters
     from urllib.parse import unquote
+    from datetime import datetime, timedelta
     decoded_run_id = unquote(run_id)
     
-    # Find batch run
+    # Find batch run - handle both main run_id and sub-run_ids
     batch = None
     for b in batch_runs:
-        if b['run_id'] == decoded_run_id:
+        if b['run_id'] == decoded_run_id or b['run_id'].startswith(decoded_run_id + '_'):
             batch = b
             break
     
     if not batch:
         return jsonify({'success': False, 'error': 'Batch run not found'}), 404
     
-    # Mock log content
-    log_content = f"""
-=== Batch {batch['workflow_type'].upper()} Log ===
-Run ID: {run_id}
+    # Build log content with real information
+    log_sections = []
+    
+    # Header section
+    log_sections.append(f"""=== Batch {batch['workflow_type'].upper()} Log ===
+Run ID: {decoded_run_id}
 Mode: {batch['mode']}
 TES Instance: {batch['tes_name']}
+TES URL: {batch.get('tes_url', 'Unknown')}
 Status: {batch['status']}
-Submitted: {batch['submitted_at']}
-
-[2024-01-01 10:00:00] Batch execution started
-[2024-01-01 10:00:01] Distributing tasks across instances
-[2024-01-01 10:00:02] Executing tasks in parallel
-[2024-01-01 10:00:03] Collecting results
-[2024-01-01 10:00:04] Batch execution completed
-"""
+Submitted: {batch['submitted_at']}""")
     
-    return jsonify({'success': True, 'log': log_content, 'batch': batch})
+    # Find related tasks for this batch run
+    batch_tes_url = batch.get('tes_url', '').rstrip('/')
+    batch_submitted_time = batch.get('submitted_at', '')
+    
+    # Find tasks submitted to the same TES instance around the same time
+    related_tasks = []
+    if batch_tes_url and batch_submitted_time:
+        try:
+            batch_time = datetime.fromisoformat(batch_submitted_time.replace('Z', '+00:00'))
+            time_window_start = batch_time - timedelta(minutes=5)
+            time_window_end = batch_time + timedelta(hours=24)
+            
+            for task in submitted_tasks:
+                task_tes_url = task.get('tes_url', '').rstrip('/')
+                task_submitted = task.get('submitted_at') or task.get('creation_time', '')
+                
+                if task_tes_url == batch_tes_url and task_submitted:
+                    try:
+                        task_time = datetime.fromisoformat(task_submitted.replace('Z', '+00:00'))
+                        if time_window_start <= task_time <= time_window_end:
+                            related_tasks.append(task)
+                    except:
+                        pass
+        except Exception as e:
+            print(f"Error matching tasks to batch: {e}")
+    
+    # Add batch metadata
+    if batch.get('files'):
+        log_sections.append(f"\n=== Batch Files ===")
+        for file_info in batch['files']:
+            log_sections.append(f"  • {file_info.get('filename', 'Unknown')}")
+    
+    # Add related tasks information with real logs
+    if related_tasks:
+        log_sections.append(f"\n=== Batch Tasks ({len(related_tasks)} found) ===")
+        for i, task in enumerate(related_tasks, 1):
+            task_id = task.get('task_id') or task.get('id', 'Unknown')
+            task_name = task.get('task_name') or task.get('name', 'Unknown')
+            task_state = task.get('state') or task.get('status', 'Unknown')
+            log_sections.append(f"\n--- Task {i}: {task_name} ---")
+            log_sections.append(f"Task ID: {task_id}")
+            log_sections.append(f"State: {task_state}")
+            log_sections.append(f"Submitted: {task.get('submitted_at') or task.get('creation_time', 'Unknown')}")
+            
+            if task.get('start_time'):
+                log_sections.append(f"Started: {task['start_time']}")
+            if task.get('end_time'):
+                log_sections.append(f"Completed: {task['end_time']}")
+            
+            # Try to fetch real logs from this task
+            if task.get('tes_url') and task_id:
+                try:
+                    tes_url = task['tes_url'].rstrip('/')
+                    tes_endpoint = f"{tes_url}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
+                    
+                    instance_name = task.get('tes_name', 'Unknown')
+                    credentials = get_instance_credentials(instance_name, tes_url)
+                    
+                    headers = {'Accept': 'application/json'}
+                    auth = None
+                    if credentials.get('token'):
+                        headers['Authorization'] = f"Bearer {credentials['token']}"
+                    elif credentials.get('user') and credentials.get('password'):
+                        auth = (credentials['user'], credentials['password'])
+                    
+                    response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+                    if response.status_code == 200:
+                        task_data = response.json()
+                        log_sections.append(f"Execution Logs:")
+                        
+                        # Extract logs from the real task data
+                        if task_data.get('logs'):
+                            for executor_idx, executor_log in enumerate(task_data['logs'], 1):
+                                log_sections.append(f"\n  Executor {executor_idx}:")
+                                if executor_log.get('logs'):
+                                    for log_entry in executor_log['logs']:
+                                        if log_entry.get('start_time'):
+                                            log_sections.append(f"    Start: {log_entry['start_time']}")
+                                        if log_entry.get('end_time'):
+                                            log_sections.append(f"    End: {log_entry['end_time']}")
+                                        if log_entry.get('exit_code') is not None:
+                                            log_sections.append(f"    Exit Code: {log_entry['exit_code']}")
+                                        if log_entry.get('stdout'):
+                                            stdout_lines = log_entry['stdout'].split('\n')
+                                            log_sections.append(f"    STDOUT ({len(stdout_lines)} lines):")
+                                            for line in stdout_lines[:50]:  # Show first 50 lines
+                                                log_sections.append(f"      {line}")
+                                            if len(stdout_lines) > 50:
+                                                log_sections.append(f"      ... ({len(stdout_lines) - 50} more lines)")
+                                        if log_entry.get('stderr'):
+                                            stderr_lines = log_entry['stderr'].split('\n')
+                                            log_sections.append(f"    STDERR ({len(stderr_lines)} lines):")
+                                            for line in stderr_lines[:50]:  # Show first 50 lines
+                                                log_sections.append(f"      {line}")
+                                            if len(stderr_lines) > 50:
+                                                log_sections.append(f"      ... ({len(stderr_lines) - 50} more lines)")
+                        else:
+                            log_sections.append(f"    No execution logs available yet (task may still be running)")
+                    else:
+                        log_sections.append(f"    Logs: Unable to fetch from TES instance (Status: {response.status_code})")
+                except requests.exceptions.Timeout:
+                    log_sections.append(f"    Logs: Request timeout - TES instance may be slow or unavailable")
+                except requests.exceptions.ConnectionError as e:
+                    log_sections.append(f"    Logs: Connection error - {str(e)[:100]}")
+                except Exception as e:
+                    log_sections.append(f"    Logs: Error fetching logs - {str(e)[:100]}")
+            else:
+                log_sections.append(f"    Logs: Task information incomplete (missing tes_url or task_id)")
+    else:
+        log_sections.append(f"\n=== Task Information ===")
+        log_sections.append("No related tasks found. This batch may not have submitted any tasks yet, or tasks were submitted to a different instance.")
+        log_sections.append(f"\nTo view task logs, check tasks submitted to: {batch_tes_url}")
+        log_sections.append(f"Time window: {batch_submitted_time} ± 5 minutes")
+    
+    log_content = '\n'.join(log_sections)
+    
+    return jsonify({'success': True, 'log': log_content, 'batch': batch, 'related_tasks_count': len(related_tasks)})
 
 
 @app.route('/api/task_log')
@@ -3220,12 +3535,16 @@ if __name__ == '__main__':
     # Using hardcoded instances - no health checking needed!
     print("✅ Using hardcoded healthy TES instances - no initialization needed!")
     
+    # Start background task status updater
+    start_task_status_updater()
+    
     # Start the Flask development server
     print("🚀 Starting TES Dashboard Backend Server...")
     print(f"💻 Server will be available at http://localhost:{port}")
     print(f"🔗 Frontend should connect to http://localhost:{port}")
     print("📊 Middleware system status:", "enabled" if MIDDLEWARE_AVAILABLE else "disabled")
     print(f"🔧 Environment: {'development' if debug_mode else 'production'}")
+    print("🔄 Task status auto-update: enabled (checks every 30 seconds)")
     
     app.run(
         host='0.0.0.0',  # Allow connections from any IP
