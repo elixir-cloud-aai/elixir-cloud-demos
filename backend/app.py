@@ -614,7 +614,7 @@ def tes_locations():
         try:
             tes_base_url = instance.get("url", "").rstrip("/")
             if not tes_base_url:
-            return {**instance, "status": "unreachable"}
+                return {**instance, "status": "unreachable"}
 
             start_time = time.time()
             r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
