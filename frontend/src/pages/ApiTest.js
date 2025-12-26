@@ -79,8 +79,15 @@ const ApiTest = () => {
 
     // Test 4: Service info
     try {
-      const info = await serviceInfoService.getServiceInfo('http://localhost:8000');
-      addResult('serviceInfo', true, 'Service info loaded successfully');
+      const dashboardData = await fetchDashboardData();
+      const tesInstances = dashboardData.tes_instances || [];
+      if (tesInstances.length > 0) {
+        const testUrl = tesInstances[0].url;
+        const info = await serviceInfoService.getServiceInfo(testUrl);
+        addResult('serviceInfo', true, 'Service info loaded successfully');
+      } else {
+        addResult('serviceInfo', false, 'No TES instances available to test');
+      }
     } catch (error) {
       addResult('serviceInfo', false, `Service info failed: ${error.message}`);
     }

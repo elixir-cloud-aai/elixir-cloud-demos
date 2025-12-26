@@ -454,7 +454,9 @@ const InstanceManagement = () => {
         lng: 0
       };
 
-      const response = await fetch('http://localhost:8000/api/nodes', {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/nodes` : '/api/nodes';
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -481,7 +483,9 @@ const InstanceManagement = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/nodes/${instanceId}`, {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/nodes/${instanceId}` : `/api/nodes/${instanceId}`;
+      const response = await fetch(url, {
         method: 'DELETE'
       });
 

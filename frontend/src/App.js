@@ -16,7 +16,6 @@ import Logs from './pages/Logs';
 import NetworkTopology from './pages/NetworkTopology';
 import NodeManagement from './pages/NodeManagement';
 import Utilities from './pages/Utilities';
-import InstanceManagement from './pages/InstanceManagement';
 import ApiTest from './pages/ApiTest';
 import MiddlewareManager from './pages/MiddlewareManager';
 import Settings from './pages/Settings';
@@ -79,7 +78,7 @@ function App() {
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/topology" element={<NetworkTopology />} />
                 <Route path="/utilities" element={<Utilities />} />
-                <Route path="/instances" element={<InstanceManagement />} />
+                <Route path="/instances" element={<Navigate to="/utilities" replace />} />
                 <Route path="/api-test" element={<ApiTest />} />
                 <Route path="/middleware" element={<MiddlewareManager />} />
                 <Route path="/nodes" element={

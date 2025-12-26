@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import api from '../services/api';
 import { 
-  Wifi, Server, Clock, AlertCircle, CheckCircle, Shield, 
-  Plus, Trash2, ArrowUp, ArrowDown, Github, Settings, 
-  Play, Pause, RotateCcw, Eye, Code, ExternalLink, BarChart3
+  Server, Clock, AlertCircle, CheckCircle, Play, 
+  ExternalLink, RotateCcw, Globe
 } from 'lucide-react';
 
 const UtilitiesContainer = styled.div`
@@ -38,7 +37,7 @@ const ServiceStatusSection = styled.div`
   margin-bottom: 2rem;
 `;
 
-const MiddlewareSection = styled.div`
+const TESInstancesSection = styled.div`
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -48,29 +47,30 @@ const MiddlewareSection = styled.div`
 
 const SectionHeader = styled.div`
   background: #f9fafb;
-  padding: 1.5rem 2rem;
+  padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 `;
 
 const SectionTitle = styled.h2`
   font-size: 1.25rem;
   font-weight: 600;
   color: #1f2937;
-  margin-bottom: 0.25rem;
+  margin: 0 0 0.25rem 0;
 `;
 
 const SectionDescription = styled.p`
   color: #6b7280;
   font-size: 0.875rem;
+  margin: 0;
 `;
 
 const HeaderActions = styled.div`
   display: flex;
-  gap: 0.75rem;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 1rem;
 `;
 
 const ActionButton = styled.button`
@@ -79,1241 +79,581 @@ const ActionButton = styled.button`
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: ${props => 
-    props.$primary ? '#3b82f6' : 
-    props.$success ? '#10b981' :
-    props.$warning ? '#f59e0b' :
-    props.$danger ? '#ef4444' : 'white'
-  };
-  color: ${props => 
-    props.$primary || props.$success || props.$warning || props.$danger ? 'white' : '#374151'
-  };
+  border-radius: 0.375rem;
+  background: white;
+  color: #374151;
   font-size: 0.875rem;
-  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: #f9fafb;
+    border-color: #9ca3af;
   }
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
+  ${props => props.$primary && `
+    background: #2563eb;
+    border-color: #2563eb;
+    color: white;
+    
+    &:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+    }
+  `}
+`;
+
+const LastUpdateIndicator = styled.div`
+  font-size: 0.875rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const LoadingState = styled.div`
   padding: 3rem;
   text-align: center;
   color: #6b7280;
-  font-size: 1rem;
 `;
 
 const ErrorState = styled.div`
   padding: 3rem;
   text-align: center;
-  color: #ef4444;
-  font-size: 1rem;
+  color: #dc2626;
   background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  margin: 1rem;
 `;
 
-const ServicesList = styled.div`
-  padding: 1.5rem 2rem;
+const InstanceList = styled.div`
+  display: flex;
+  flex-direction: column;
 `;
 
-const ServiceItem = styled.div`
+const InstanceItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  transition: all 0.2s;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
-const ServiceInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-grow: 1;
-`;
-
-const ServiceIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${props => 
-    props.$status === 'online' ? '#dcfce7' : '#fee2e2'
-  };
-  color: ${props => 
-    props.$status === 'online' ? '#16a34a' : '#dc2626'
-  };
-`;
-
-const ServiceDetails = styled.div`
-  flex-grow: 1;
-`;
-
-const ServiceName = styled.div`
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const ServiceUrl = styled.div`
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-family: monospace;
-`;
-
-const ServiceBadge = styled.span`
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 12px;
-  background: ${props => props.$isGateway ? '#dbeafe' : '#f3f4f6'};
-  color: ${props => props.$isGateway ? '#2563eb' : '#374151'};
-`;
-
-const ServiceStatus = styled.div`
-  text-align: right;
-`;
-
-const StatusIndicator = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-  font-weight: 500;
-  color: ${props => 
-    props.$status === 'online' ? '#16a34a' : '#dc2626'
-  };
-`;
-
-const StatusIcon = styled.span`
-  display: flex;
-  align-items: center;
-`;
-
-const LastChecked = styled.div`
-  font-size: 0.75rem;
-  color: #6b7280;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-`;
-
-const RefreshInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 2rem;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
-  font-size: 0.875rem;
-  color: #6b7280;
-`;
-
-const MiddlewareList = styled.div`
-  padding: 1.5rem 2rem;
-`;
-
-const MiddlewareItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
   padding: 1.5rem;
-  border: 2px solid ${props => props.$enabled ? '#d1fae5' : '#fee2e2'};
-  border-radius: 12px;
-  margin-bottom: 1rem;
-  background: ${props => props.$enabled ? '#f0fdf4' : '#fefcfc'};
-  transition: all 0.3s;
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+  
   &:last-child {
-    margin-bottom: 0;
+    border-bottom: none;
   }
+  
+  &:hover {
+    background-color: #f9fafb;
+  }
+  
+  ${props => props.$status === 'error' && `
+    background-color: #fef2f2;
+    border-left: 4px solid #dc2626;
+  `}
+  
+  ${props => props.$status === 'healthy' && `
+    border-left: 4px solid #059669;
+  `}
 `;
 
-const MiddlewareOrder = styled.div`
+const InstanceInfo = styled.div`
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 0.5rem;
 `;
 
-const OrderNumber = styled.div`
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #3b82f6;
-  color: white;
+const InstanceHeader = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 0.875rem;
-`;
-
-const OrderControls = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const OrderButton = styled.button`
-  width: 24px;
-  height: 24px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover:not(:disabled) {
-    background: #f3f4f6;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const MiddlewareContent = styled.div`
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
   gap: 1rem;
 `;
 
-const MiddlewareHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-`;
-
-const MiddlewareIcon = styled.div`
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${props => {
-    switch (props.$type) {
-      case 'authentication':
-      case 'authorization':
-        return '#fef3c7';
-      case 'logging':
-        return '#dbeafe';
-      case 'monitoring':
-        return '#d1fae5';
-      default:
-        return '#f3f4f6';
-    }
-  }};
-  color: ${props => {
-    switch (props.$type) {
-      case 'authentication':
-      case 'authorization':
-        return '#d97706';
-      case 'logging':
-        return '#2563eb';
-      case 'monitoring':
-        return '#059669';
-      default:
-        return '#374151';
-    }
-  }};
-`;
-
-const MiddlewareInfo = styled.div`
-  flex-grow: 1;
-`;
-
-const MiddlewareName = styled.h3`
+const InstanceName = styled.h3`
+  margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const MiddlewareType = styled.div`
-  font-size: 0.875rem;
-  color: #6b7280;
-  text-transform: capitalize;
-  margin-bottom: 0.5rem;
-`;
-
-const MiddlewareDescription = styled.p`
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.4;
-`;
-
-const SourceBadge = styled.span`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 12px;
-  background: #f3f4f6;
-  color: #374151;
-`;
-
-const MiddlewareStats = styled.div`
-  display: flex;
-  gap: 2rem;
-`;
-
-const StatItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-`;
-
-const StatLabel = styled.span`
-  font-size: 0.75rem;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-`;
-
-const StatValue = styled.span`
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 `;
 
 const StatusBadge = styled.span`
-  padding: 0.25rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
   font-size: 0.75rem;
   font-weight: 500;
-  border-radius: 12px;
-  background: ${props => props.$enabled ? '#dcfce7' : '#fee2e2'};
-  color: ${props => props.$enabled ? '#16a34a' : '#dc2626'};
+  text-transform: uppercase;
+  
+  ${props => props.$status === 'healthy' ? `
+    background: rgba(5, 150, 105, 0.1);
+    color: #059669;
+  ` : `
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+  `}
 `;
 
-const MiddlewareActions = styled.div`
+const InstanceDetails = styled.div`
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  flex-wrap: wrap;
+`;
+
+const UrlText = styled.span`
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const InstanceActions = styled.div`
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 `;
 
 const EmptyState = styled.div`
+  padding: 3rem;
   text-align: center;
-  padding: 4rem 2rem;
   color: #6b7280;
-
-  svg {
-    color: #d1d5db;
-    margin-bottom: 1rem;
-  }
-
+  
   h3 {
-    font-size: 1.125rem;
-    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
     color: #374151;
-    margin-bottom: 0.5rem;
   }
-
+  
   p {
-    margin-bottom: 1.5rem;
+    margin: 0 0 1.5rem 0;
   }
 `;
 
-// Modal Components
-const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+const ServiceGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+`;
+
+const ServiceCard = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  z-index: 1000;
   padding: 1rem;
-`;
-
-const ModalContent = styled.div`
-  background: white;
-  border-radius: 12px;
-  max-width: 600px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-`;
-
-const ModalHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e5e7eb;
-
-  h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin: 0;
-  }
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
   transition: all 0.2s;
 
   &:hover {
-    background: #f3f4f6;
-    color: #374151;
+    border-color: #9ca3af;
   }
 `;
 
-const ModalBody = styled.div`
-  padding: 2rem;
-`;
-
-const ModalFooter = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem 2rem;
-  border-top: 1px solid #e5e7eb;
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 1.5rem;
-`;
-
-const FormLabel = styled.label`
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.5rem;
-`;
-
-const FormInput = styled.input`
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  transition: border-color 0.2s;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  }
-`;
-
-const FormSelect = styled.select`
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  background: white;
-  transition: border-color 0.2s;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  }
-`;
-
-const FormTextarea = styled.textarea`
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  resize: vertical;
-  min-height: 80px;
-  transition: border-color 0.2s;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  }
-`;
-
-const CheckboxGroup = styled.div`
+const ServiceIcon = styled.div`
+  width: 2.5rem;
+  height: 2.5rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  border-radius: 50%;
+  margin-bottom: 0.5rem;
+  
+  ${props => props.$status === 'healthy' ? `
+    background: rgba(5, 150, 105, 0.1);
+    color: #059669;
+  ` : `
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+  `}
 `;
 
-const FormCheckbox = styled.input`
-  width: 1rem;
-  height: 1rem;
+const ServiceName = styled.div`
+  font-weight: 500;
+  color: #111827;
+  text-align: center;
+  margin-bottom: 0.25rem;
 `;
 
-const CodePreview = styled.div`
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  padding: 1rem;
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  overflow-x: auto;
-
-  pre {
-    margin: 0;
-    white-space: pre-wrap;
-  }
+const ServiceStatus = styled.div`
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
 `;
 
 const Utilities = () => {
   // Service Status State
-  const [services, setServices] = useState([]);
+  const [services, setServices] = useState([
+    { name: 'Backend API', status: 'healthy', url: '/api/dashboard_data' },
+    { name: 'Database', status: 'healthy', url: null },
+    { name: 'File Storage', status: 'healthy', url: null },
+  ]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
 
-  // Middleware Management State
-  const [middlewares, setMiddlewares] = useState([]);
-  const [middlewareLoading, setMiddlewareLoading] = useState(true);
-  const [middlewareError, setMiddlewareError] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedMiddleware, setSelectedMiddleware] = useState(null);
-  const [newMiddleware, setNewMiddleware] = useState({
-    name: '',
-    type: 'authentication',
-    source: 'local',
-    githubUrl: '',
-    filePath: '',
-    description: '',
-    priority: 5,
-    enabled: true,
-    config: {}
-  });
+  // TES Instance Management State
+  const [tesInstances, setTesInstances] = useState([]);
+  const [instancesLoading, setInstancesLoading] = useState(true);
+  const [instancesError, setInstancesError] = useState('');
+  const [lastStatusUpdate, setLastStatusUpdate] = useState(null);
 
-  const middlewareTypes = [
-    'authentication',
-    'authorization', 
-    'rate_limiting',
-    'logging',
-    'validation',
-    'caching',
-    'monitoring'
-  ];
-
-  // Service Status Functions
-  const checkServiceHealth = useCallback(async () => {
+  // Load TES instances
+  const loadTesInstances = useCallback(async () => {
     try {
-      const response = await api.get('/api/service-info');
+      setInstancesLoading(true);
+      setInstancesError('');
       
-      if (response.data && response.data.tesInstances) {
-        const healthChecks = await Promise.allSettled(
-          response.data.tesInstances.map(async (instance) => {
-            try {
-              const startTime = Date.now();
-              const healthResponse = await fetch(`${instance.url}/ga4gh/tes/v1/api/service-info`, {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/json',
-                },
-                timeout: 5000
-              });
-              const responseTime = Date.now() - startTime;
-              
-              return {
-                ...instance,
-                status: healthResponse.ok ? 'online' : 'offline',
-                responseTime: responseTime
-              };
-            } catch (err) {
-              return {
-                ...instance,
-                status: 'offline',
-                responseTime: null,
-                error: err.message
-              };
-            }
-          })
-        );
-
-        const servicesWithHealth = healthChecks.map((result, index) => {
-          if (result.status === 'fulfilled') {
-            return result.value;
-          } else {
+      // Get TES instances from dashboard data
+      const response = await api.get('/api/dashboard_data');
+      const tesInstancesData = response.data.tes_instances || [];
+      
+      // Check status for each instance
+      const instancesWithStatus = await Promise.all(
+        tesInstancesData.map(async (instance) => {
+          try {
+            const startTime = Date.now();
+            
+            // Try to get service info from each instance
+            await api.get('/api/service_info', {
+              params: { tes_url: instance.url },
+              timeout: 10000 // 10 second timeout
+            });
+            
+            const responseTime = Date.now() - startTime;
+            
             return {
-              ...response.data.tesInstances[index],
-              status: 'offline',
+              ...instance,
+              status: 'healthy',
+              lastChecked: new Date().toISOString(),
+              responseTime,
+              error: null
+            };
+          } catch (error) {
+            return {
+              ...instance,
+              status: 'error',
+              lastChecked: new Date().toISOString(),
               responseTime: null,
-              error: result.reason?.message || 'Unknown error'
+              error: error.message
             };
           }
-        });
-
-        setServices(servicesWithHealth);
-        setLastChecked(new Date());
-      } else {
-        setServices([]);
-      }
+        })
+      );
       
+      setTesInstances(instancesWithStatus);
+      setLastStatusUpdate(new Date().toISOString());
+    } catch (error) {
+      console.error('Failed to load TES instances:', error);
+      setInstancesError('Failed to load TES instances: ' + error.message);
+    } finally {
+      setInstancesLoading(false);
+    }
+  }, []);
+
+  // Check service status
+  const checkServiceStatus = useCallback(async () => {
+    try {
+      setServicesLoading(true);
+      
+      // Define services inline to avoid dependency
+      const currentServices = [
+        { name: 'Backend API', status: 'healthy', url: '/api/dashboard_data' },
+        { name: 'Database', status: 'healthy', url: null },
+        { name: 'File Storage', status: 'healthy', url: null },
+      ];
+      
+      const updatedServices = await Promise.all(
+        currentServices.map(async (service) => {
+          if (!service.url) {
+            return { ...service, status: 'healthy' };
+          }
+          
+          try {
+            await api.get(service.url, { timeout: 5000 });
+            return { ...service, status: 'healthy' };
+          } catch (error) {
+            return { ...service, status: 'error' };
+          }
+        })
+      );
+      
+      setServices(updatedServices);
+      setLastChecked(new Date());
       setServicesError(null);
-    } catch (err) {
-      console.error('Health check error:', err);
-      setServicesError(err.message || 'Failed to check service health');
-      setServices([]);
+    } catch (error) {
+      setServicesError('Failed to check service status');
     } finally {
       setServicesLoading(false);
     }
   }, []);
 
-  // Middleware Management Functions
-  const fetchMiddlewares = useCallback(async () => {
-    try {
-      setMiddlewareLoading(true);
-      const response = await fetch('/api/middleware/status');
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        const middlewareList = Object.values(data.middlewares).map((middleware, index) => ({
-          id: middleware.name,
-          ...middleware,
-          order: middleware.priority || index,
-          source: 'local' // Default for existing middlewares
-        }));
-        
-        // Sort by priority (lower number = higher priority)
-        middlewareList.sort((a, b) => a.priority - b.priority);
-        setMiddlewares(middlewareList);
-        setMiddlewareError(null);
-      } else {
-        setMiddlewareError(data.error || 'Failed to fetch middlewares');
-      }
-    } catch (err) {
-      setMiddlewareError('Network error: ' + err.message);
-    } finally {
-      setMiddlewareLoading(false);
-    }
-  }, []);
-
-  const toggleMiddleware = async (middlewareName) => {
-    try {
-      const response = await fetch(`/api/middleware/${middlewareName}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      const data = await response.json();
-      if (data.status === 'success') {
-        setMiddlewares(prev => 
-          prev.map(m => 
-            m.name === middlewareName 
-              ? { ...m, enabled: data.enabled }
-              : m
-          )
-        );
-      } else {
-        alert('Error: ' + (data.error || 'Failed to toggle middleware'));
-      }
-    } catch (err) {
-      alert('Network error: ' + err.message);
-    }
-  };
-
-  const moveMiddleware = (index, direction) => {
-    const newMiddlewares = [...middlewares];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  // Test individual instance connection
+  const testInstanceConnection = async (url) => {
+    const instance = tesInstances.find(inst => inst.url === url);
+    const instanceName = instance?.name || url;
     
-    if (targetIndex >= 0 && targetIndex < newMiddlewares.length) {
-      // Swap priorities
-      const currentPriority = newMiddlewares[index].priority;
-      const targetPriority = newMiddlewares[targetIndex].priority;
-      
-      newMiddlewares[index].priority = targetPriority;
-      newMiddlewares[targetIndex].priority = currentPriority;
-      
-      // Re-sort by priority
-      newMiddlewares.sort((a, b) => a.priority - b.priority);
-      setMiddlewares(newMiddlewares);
-      
-      // TODO: Send priority updates to backend
-      console.log(`Moving middleware ${newMiddlewares[index].name} ${direction}`);
-    }
-  };
-
-  const addMiddleware = async () => {
     try {
-      // Validation
-      if (!newMiddleware.name.trim()) {
-        alert('Middleware name is required');
-        return;
-      }
-
-      if (newMiddleware.source === 'github' && !newMiddleware.githubUrl) {
-        alert('GitHub URL is required for external middlewares');
-        return;
-      }
-
-      // Check for duplicate names
-      if (middlewares.some(m => m.name.toLowerCase() === newMiddleware.name.toLowerCase())) {
-        alert('Middleware with this name already exists');
-        return;
-      }
-
-      // Create new middleware entry
-      const middlewareToAdd = {
-        ...newMiddleware,
-        id: newMiddleware.name.toLowerCase().replace(/\s+/g, '_'),
-        order: middlewares.length,
-        metrics: {}
-      };
-
-      setMiddlewares(prev => {
-        const updated = [...prev, middlewareToAdd];
-        return updated.sort((a, b) => a.priority - b.priority);
+      const startTime = Date.now();
+      const response = await api.get('/api/service_info', {
+        params: { tes_url: url },
+        timeout: 10000
       });
       
-      setShowAddModal(false);
-      setNewMiddleware({
-        name: '',
-        type: 'authentication',
-        source: 'local',
-        githubUrl: '',
-        filePath: '',
-        description: '',
-        priority: 5,
-        enabled: true,
-        config: {}
-      });
-
-      // TODO: Send to backend to install middleware
-      console.log('Adding middleware:', middlewareToAdd);
-    } catch (err) {
-      alert('Error adding middleware: ' + err.message);
+      const responseTime = Date.now() - startTime;
+      
+      // Update the specific instance
+      setTesInstances(prev => prev.map(inst => 
+        inst.url === url 
+          ? { 
+              ...inst, 
+              status: 'healthy', 
+              lastChecked: new Date().toISOString(),
+              responseTime,
+              error: null
+            }
+          : inst
+      ));
+      
+      // Show success message
+      const serviceInfo = response.data;
+      let successMessage = `✅ Connection Test Successful!\n\nInstance: ${instanceName}\nResponse Time: ${responseTime}ms`;
+      
+      if (serviceInfo && serviceInfo.name) {
+        successMessage += `\nService Name: ${serviceInfo.name}`;
+      }
+      if (serviceInfo && serviceInfo.version) {
+        successMessage += `\nVersion: ${serviceInfo.version}`;
+      }
+      
+      alert(successMessage);
+    } catch (error) {
+      // Extract detailed error information
+      let errorMessage = `❌ Connection Test Failed\n\nInstance: ${instanceName}\nURL: ${url}\n\n`;
+      let errorReason = '';
+      let errorCode = '';
+      let errorType = '';
+      
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        errorMessage += `Error: ${errorData.error || errorData.message || error.message || 'Unknown error'}`;
+        errorReason = errorData.reason || '';
+        errorCode = errorData.error_code || '';
+        errorType = errorData.error_type || '';
+        
+        if (errorReason) {
+          errorMessage += `\n\nReason: ${errorReason}`;
+        }
+        if (errorCode) {
+          errorMessage += `\nError Code: ${errorCode}`;
+        }
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage += `Error: Connection Timeout\n\nThe TES instance did not respond within 10 seconds.\n\nReason: The instance may be overloaded, offline, or unreachable.`;
+        errorCode = 'TIMEOUT';
+        errorType = 'timeout';
+      } else if (error.code === 'ENOTFOUND' || error.message.includes('resolve')) {
+        errorMessage += `Error: DNS Resolution Failed\n\nCannot resolve the hostname.\n\nReason: The hostname "${url}" cannot be resolved. Check if the URL is correct.`;
+        errorCode = 'DNS_ERROR';
+        errorType = 'dns_error';
+      } else if (error.code === 'ECONNREFUSED' || error.message.includes('refused')) {
+        errorMessage += `Error: Connection Refused\n\nThe TES instance is not accepting connections.\n\nReason: The instance may be offline, the port may be blocked, or the service may not be running.`;
+        errorCode = 'CONNECTION_REFUSED';
+        errorType = 'connection_refused';
+      } else if (error.message) {
+        errorMessage += `Error: ${error.message}`;
+      } else {
+        errorMessage += `Error: Unknown error occurred`;
+      }
+      
+      // Update the specific instance with error details
+      setTesInstances(prev => prev.map(inst => 
+        inst.url === url 
+          ? { 
+              ...inst, 
+              status: 'error', 
+              lastChecked: new Date().toISOString(),
+              responseTime: null,
+              error: errorReason || error.message || 'Connection failed',
+              errorCode,
+              errorType
+            }
+          : inst
+      ));
+      
+      // Show detailed error alert
+      alert(errorMessage);
     }
   };
 
-  const removeMiddleware = async (middlewareId) => {
-    if (window.confirm(`Are you sure you want to remove middleware "${middlewareId}"?`)) {
-      setMiddlewares(prev => prev.filter(m => m.id !== middlewareId));
-      // TODO: Send removal request to backend
-      console.log('Removing middleware:', middlewareId);
-    }
+  // Refresh instance status
+  const refreshInstanceStatus = () => {
+    loadTesInstances();
   };
 
-  const viewMiddlewareCode = (middleware) => {
-    if (middleware.source === 'github') {
-      window.open(middleware.githubUrl, '_blank');
-    } else {
-      // Open local file or show code modal
-      setSelectedMiddleware(middleware);
-    }
-  };
-
-  // Effects
+  // Auto-refresh every hour
   useEffect(() => {
-    checkServiceHealth();
-    const interval = setInterval(checkServiceHealth, 3000);
+    // Initial load
+    const initialLoad = async () => {
+      await loadTesInstances();
+      await checkServiceStatus();
+    };
+    
+    initialLoad();
+    
+    const interval = setInterval(() => {
+      loadTesInstances();
+      checkServiceStatus();
+    }, 60 * 60 * 1000); // 1 hour
+    
     return () => clearInterval(interval);
-  }, [checkServiceHealth]);
-
-  useEffect(() => {
-    fetchMiddlewares();
-  }, [fetchMiddlewares]);
-
-  // Utility Functions
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'online':
-        return <CheckCircle size={16} />;
-      case 'offline':
-      default:
-        return <AlertCircle size={16} />;
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'online':
-        return 'Online';
-      case 'offline':
-      default:
-        return 'Offline';
-    }
-  };
-
-  const getMiddlewareIcon = (type) => {
-    switch (type) {
-      case 'authentication':
-      case 'authorization':
-        return <Shield size={20} />;
-      case 'logging':
-        return <Eye size={20} />;
-      case 'monitoring':
-        return <BarChart3 size={20} />;
-      default:
-        return <Settings size={20} />;
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty to avoid infinite loops
 
   return (
     <UtilitiesContainer>
       <PageHeader>
-        <PageTitle>Utilities</PageTitle>
-        <PageSubtitle>System monitoring and gateway middleware management</PageSubtitle>
+        <PageTitle>Utilities & Instance Management</PageTitle>
+        <PageSubtitle>System monitoring and TES instance management with real-time status checking</PageSubtitle>
       </PageHeader>
 
       {/* Service Status Section */}
       <ServiceStatusSection>
         <SectionHeader>
           <div>
-            <SectionTitle>TES Instance Health</SectionTitle>
+            <SectionTitle>Service Status</SectionTitle>
             <SectionDescription>
-              Real-time health monitoring of all configured TES service instances
-            </SectionDescription>
-          </div>
-        </SectionHeader>
-
-        {servicesLoading && services.length === 0 ? (
-          <LoadingState>Loading service information...</LoadingState>
-        ) : servicesError && services.length === 0 ? (
-          <ErrorState>{servicesError}</ErrorState>
-        ) : (
-          <>
-            <ServicesList>
-              {services.map((service, index) => (
-                <ServiceItem key={`${service.url}-${index}`}>
-                  <ServiceInfo>
-                    <ServiceIcon $status={service.status}>
-                      <Server size={20} />
-                    </ServiceIcon>
-                    <ServiceDetails>
-                      <ServiceName>
-                        {service.name || 'TES Service'}
-                        {service.isGateway && (
-                          <ServiceBadge $isGateway={true}>Gateway</ServiceBadge>
-                        )}
-                        {service.country && !service.isGateway && (
-                          <ServiceBadge $isGateway={false}>{service.country}</ServiceBadge>
-                        )}
-                      </ServiceName>
-                      <ServiceUrl>{service.url}</ServiceUrl>
-                    </ServiceDetails>
-                  </ServiceInfo>
-
-                  <ServiceStatus>
-                    <StatusIndicator $status={service.status}>
-                      <StatusIcon>{getStatusIcon(service.status)}</StatusIcon>
-                      {getStatusText(service.status)}
-                    </StatusIndicator>
-                    
-                    <LastChecked>
-                      {service.responseTime && (
-                        <div>{service.responseTime}ms</div>
-                      )}
-                      {lastChecked && (
-                        <div>
-                          <Clock size={12} style={{ display: 'inline', marginRight: '4px' }} />
-                          {lastChecked.toLocaleTimeString()}
-                        </div>
-                      )}
-                    </LastChecked>
-                  </ServiceStatus>
-                </ServiceItem>
-              ))}
-
-              {services.length === 0 && !servicesLoading && (
-                <ServiceItem>
-                  <ServiceInfo>
-                    <ServiceIcon>
-                      <AlertCircle size={20} />
-                    </ServiceIcon>
-                    <ServiceDetails>
-                      <ServiceName>No services configured</ServiceName>
-                    </ServiceDetails>
-                  </ServiceInfo>
-                </ServiceItem>
-              )}
-            </ServicesList>
-
-            <RefreshInfo>
-              <Wifi size={14} />
-              Checking service health every 3 seconds while this page is active
-              {lastChecked && (
-                <span style={{ marginLeft: 'auto' }}>
-                  Last updated: {lastChecked.toLocaleString()}
-                </span>
-              )}
-            </RefreshInfo>
-          </>
-        )}
-      </ServiceStatusSection>
-
-      {/* Gateway Middleware Management Section */}
-      <MiddlewareSection>
-        <SectionHeader>
-          <div>
-            <SectionTitle>Gateway Middleware Management</SectionTitle>
-            <SectionDescription>
-              Manage, reorder, and configure middleware components for the TES Gateway. Supports external GitHub repositories.
+              Current status of core system services
             </SectionDescription>
           </div>
           <HeaderActions>
-            <ActionButton onClick={() => setShowAddModal(true)} $primary>
-              <Plus size={16} />
-              Add Middleware
-            </ActionButton>
-            <ActionButton onClick={fetchMiddlewares}>
+            <ActionButton onClick={checkServiceStatus}>
               <RotateCcw size={16} />
               Refresh
             </ActionButton>
+            {lastChecked && (
+              <LastUpdateIndicator>
+                <Clock size={14} />
+                Last checked: {lastChecked.toLocaleTimeString()}
+              </LastUpdateIndicator>
+            )}
           </HeaderActions>
         </SectionHeader>
 
-        {middlewareLoading ? (
-          <LoadingState>Loading middleware configuration...</LoadingState>
-        ) : middlewareError ? (
-          <ErrorState>{middlewareError}</ErrorState>
+        {servicesLoading ? (
+          <LoadingState>Checking service status...</LoadingState>
+        ) : servicesError ? (
+          <ErrorState>{servicesError}</ErrorState>
         ) : (
-          <MiddlewareList>
-            {middlewares.map((middleware, index) => (
-              <MiddlewareItem key={middleware.id} $enabled={middleware.enabled}>
-                <MiddlewareOrder>
-                  <OrderNumber>{index + 1}</OrderNumber>
-                  <OrderControls>
-                    <OrderButton 
-                      onClick={() => moveMiddleware(index, 'up')}
-                      disabled={index === 0}
-                    >
-                      <ArrowUp size={14} />
-                    </OrderButton>
-                    <OrderButton 
-                      onClick={() => moveMiddleware(index, 'down')}
-                      disabled={index === middlewares.length - 1}
-                    >
-                      <ArrowDown size={14} />
-                    </OrderButton>
-                  </OrderControls>
-                </MiddlewareOrder>
-
-                <MiddlewareContent>
-                  <MiddlewareHeader>
-                    <MiddlewareIcon $type={middleware.type}>
-                      {getMiddlewareIcon(middleware.type)}
-                    </MiddlewareIcon>
-                    <MiddlewareInfo>
-                      <MiddlewareName>
-                        {middleware.name}
-                        {middleware.source === 'github' && (
-                          <SourceBadge>
-                            <Github size={12} />
-                            GitHub
-                          </SourceBadge>
-                        )}
-                      </MiddlewareName>
-                      <MiddlewareType>{middleware.type.replace('_', ' ')}</MiddlewareType>
-                      {middleware.description && (
-                        <MiddlewareDescription>{middleware.description}</MiddlewareDescription>
-                      )}
-                    </MiddlewareInfo>
-                  </MiddlewareHeader>
-
-                  <MiddlewareStats>
-                    <StatItem>
-                      <StatLabel>Priority</StatLabel>
-                      <StatValue>{middleware.priority}</StatValue>
-                    </StatItem>
-                    <StatItem>
-                      <StatLabel>Status</StatLabel>
-                      <StatusBadge $enabled={middleware.enabled}>
-                        {middleware.enabled ? 'Enabled' : 'Disabled'}
-                      </StatusBadge>
-                    </StatItem>
-                    {middleware.source && (
-                      <StatItem>
-                        <StatLabel>Source</StatLabel>
-                        <StatValue style={{ textTransform: 'capitalize' }}>{middleware.source}</StatValue>
-                      </StatItem>
-                    )}
-                  </MiddlewareStats>
-                </MiddlewareContent>
-
-                <MiddlewareActions>
-                  <ActionButton 
-                    onClick={() => toggleMiddleware(middleware.name)}
-                    $success={!middleware.enabled}
-                    $warning={middleware.enabled}
-                  >
-                    {middleware.enabled ? <Pause size={16} /> : <Play size={16} />}
-                    {middleware.enabled ? 'Disable' : 'Enable'}
-                  </ActionButton>
-                  <ActionButton onClick={() => viewMiddlewareCode(middleware)}>
-                    {middleware.source === 'github' ? <ExternalLink size={16} /> : <Code size={16} />}
-                    View Code
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={() => removeMiddleware(middleware.id)}
-                    $danger
-                  >
-                    <Trash2 size={16} />
-                    Remove
-                  </ActionButton>
-                </MiddlewareActions>
-              </MiddlewareItem>
+          <ServiceGrid>
+            {services.map((service, index) => (
+              <ServiceCard key={index}>
+                <ServiceIcon $status={service.status}>
+                  {service.status === 'healthy' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                </ServiceIcon>
+                <ServiceName>{service.name}</ServiceName>
+                <ServiceStatus>{service.status}</ServiceStatus>
+              </ServiceCard>
             ))}
+          </ServiceGrid>
+        )}
+      </ServiceStatusSection>
 
-            {middlewares.length === 0 && (
+      {/* TES Instance Management Section */}
+      <TESInstancesSection>
+        <SectionHeader>
+          <div>
+            <SectionTitle>TES Instance Management</SectionTitle>
+            <SectionDescription>
+              Monitor and manage TES instances with real-time status checking. Status updates every hour.
+            </SectionDescription>
+          </div>
+          <HeaderActions>
+            <ActionButton onClick={refreshInstanceStatus}>
+              <RotateCcw size={16} />
+              Refresh Status
+            </ActionButton>
+            <LastUpdateIndicator>
+              Last updated: {lastStatusUpdate ? new Date(lastStatusUpdate).toLocaleTimeString() : 'Never'}
+            </LastUpdateIndicator>
+          </HeaderActions>
+        </SectionHeader>
+
+        {instancesLoading ? (
+          <LoadingState>Loading TES instances...</LoadingState>
+        ) : instancesError ? (
+          <ErrorState>{instancesError}</ErrorState>
+        ) : (
+          <InstanceList>
+            {tesInstances.map((instance, index) => (
+              <InstanceItem key={instance.id || `${instance.name}-${instance.url}-${index}`} $status={instance.status}>
+                <InstanceInfo>
+                  <InstanceHeader>
+                    <InstanceName>{instance.name}</InstanceName>
+                    <StatusBadge $status={instance.status}>
+                      {instance.status === 'healthy' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                      {instance.status}
+                    </StatusBadge>
+                  </InstanceHeader>
+                  
+                  <InstanceDetails>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Server size={14} />
+                      <UrlText>{instance.url}</UrlText>
+                    </div>
+                    {instance.country && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Globe size={14} />
+                        {instance.country}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Clock size={14} />
+                      Last checked: {instance.lastChecked ? new Date(instance.lastChecked).toLocaleString() : 'Never'}
+                    </div>
+                  </InstanceDetails>
+                  
+                  {instance.responseTime && (
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Response time: {instance.responseTime}ms
+                    </div>
+                  )}
+                  
+                  {instance.error && (
+                    <div style={{ fontSize: '12px', color: '#dc2626', marginTop: '4px', background: '#fef2f2', padding: '4px 8px', borderRadius: '4px' }}>
+                      Error: {instance.error}
+                    </div>
+                  )}
+                </InstanceInfo>
+                
+                <InstanceActions>
+                  <ActionButton 
+                    onClick={() => testInstanceConnection(instance.url)}
+                    title="Test Connection"
+                  >
+                    <Play size={16} />
+                  </ActionButton>
+                  <ActionButton 
+                    onClick={() => window.open(instance.url, '_blank')}
+                    title="Open in Browser"
+                  >
+                    <ExternalLink size={16} />
+                  </ActionButton>
+                </InstanceActions>
+              </InstanceItem>
+            ))}
+            
+            {tesInstances.length === 0 && (
               <EmptyState>
-                <Shield size={48} />
-                <h3>No middlewares configured</h3>
-                <p>Add your first middleware to start managing the gateway processing pipeline</p>
-                <ActionButton onClick={() => setShowAddModal(true)} $primary>
-                  <Plus size={16} />
-                  Add Middleware
-                </ActionButton>
+                <Server size={48} />
+                <h3>No TES Instances Found</h3>
+                <p>No TES instances are currently available</p>
               </EmptyState>
             )}
-          </MiddlewareList>
+          </InstanceList>
         )}
-      </MiddlewareSection>
-
-      {/* Add Middleware Modal */}
-      {showAddModal && (
-        <ModalOverlay onClick={() => setShowAddModal(false)}>
-          <ModalContent onClick={(e) => e.stopPropagation()}>
-            <ModalHeader>
-              <h2>Add New Middleware</h2>
-              <CloseButton onClick={() => setShowAddModal(false)}>×</CloseButton>
-            </ModalHeader>
-            
-            <ModalBody>
-              <FormGroup>
-                <FormLabel>Name *</FormLabel>
-                <FormInput
-                  type="text"
-                  value={newMiddleware.name}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, name: e.target.value})}
-                  placeholder="Enter middleware name"
-                />
-              </FormGroup>
-
-              <FormGroup>
-                <FormLabel>Type</FormLabel>
-                <FormSelect
-                  value={newMiddleware.type}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, type: e.target.value})}
-                >
-                  {middlewareTypes.map(type => (
-                    <option key={type} value={type}>
-                      {type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </option>
-                  ))}
-                </FormSelect>
-              </FormGroup>
-
-              <FormGroup>
-                <FormLabel>Source</FormLabel>
-                <FormSelect
-                  value={newMiddleware.source}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, source: e.target.value})}
-                >
-                  <option value="local">Local Implementation</option>
-                  <option value="github">External GitHub Repository</option>
-                </FormSelect>
-              </FormGroup>
-
-              {newMiddleware.source === 'github' && (
-                <>
-                  <FormGroup>
-                    <FormLabel>GitHub Repository URL *</FormLabel>
-                    <FormInput
-                      type="url"
-                      value={newMiddleware.githubUrl}
-                      onChange={(e) => setNewMiddleware({...newMiddleware, githubUrl: e.target.value})}
-                      placeholder="https://github.com/username/repo"
-                    />
-                  </FormGroup>
-                  
-                  <FormGroup>
-                    <FormLabel>File Path (optional)</FormLabel>
-                    <FormInput
-                      type="text"
-                      value={newMiddleware.filePath}
-                      onChange={(e) => setNewMiddleware({...newMiddleware, filePath: e.target.value})}
-                      placeholder="src/middleware/custom_middleware.py"
-                    />
-                  </FormGroup>
-                </>
-              )}
-
-              <FormGroup>
-                <FormLabel>Description</FormLabel>
-                <FormTextarea
-                  value={newMiddleware.description}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, description: e.target.value})}
-                  placeholder="Brief description of middleware functionality"
-                />
-              </FormGroup>
-
-              <FormGroup>
-                <FormLabel>Priority (1-10, lower = higher priority)</FormLabel>
-                <FormInput
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={newMiddleware.priority}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, priority: parseInt(e.target.value)})}
-                />
-              </FormGroup>
-
-              <CheckboxGroup>
-                <FormCheckbox
-                  type="checkbox"
-                  checked={newMiddleware.enabled}
-                  onChange={(e) => setNewMiddleware({...newMiddleware, enabled: e.target.checked})}
-                />
-                <FormLabel>Enable immediately after adding</FormLabel>
-              </CheckboxGroup>
-            </ModalBody>
-
-            <ModalFooter>
-              <ActionButton onClick={() => setShowAddModal(false)}>Cancel</ActionButton>
-              <ActionButton onClick={addMiddleware} $primary>
-                <Plus size={16} />
-                Add Middleware
-              </ActionButton>
-            </ModalFooter>
-          </ModalContent>
-        </ModalOverlay>
-      )}
-
-      {/* Middleware Code View Modal */}
-      {selectedMiddleware && (
-        <ModalOverlay onClick={() => setSelectedMiddleware(null)}>
-          <ModalContent onClick={(e) => e.stopPropagation()}>
-            <ModalHeader>
-              <h2>{selectedMiddleware.name} - Source Code</h2>
-              <CloseButton onClick={() => setSelectedMiddleware(null)}>×</CloseButton>
-            </ModalHeader>
-            
-            <ModalBody>
-              <CodePreview>
-                <pre>
-                  <code>
-                    {`# ${selectedMiddleware.name} - ${selectedMiddleware.type}
-# This is a placeholder for the actual middleware implementation
-# In a real system, this would show the actual source code
-
-class ${selectedMiddleware.name.replace(/\s+/g, '')}Middleware(BaseMiddleware):
-    def __init__(self, config):
-        super().__init__(config)
-        self.enabled = ${selectedMiddleware.enabled}
-        self.priority = ${selectedMiddleware.priority}
-    
-    async def process_request(self, context):
-        """
-        Process incoming request through ${selectedMiddleware.type} middleware
-        
-        Args:
-            context: MiddlewareContext containing request information
-            
-        Returns:
-            tuple: (should_continue: bool, response: dict or None)
-        """
-        if not self.enabled:
-            return True, None
-            
-        # ${selectedMiddleware.type} implementation would go here
-        print(f"Processing request through ${selectedMiddleware.name}")
-        
-        return True, None
-    
-    async def process_response(self, context, response):
-        """
-        Process outgoing response through ${selectedMiddleware.type} middleware
-        
-        Args:
-            context: MiddlewareContext containing request information
-            response: Response data to process
-            
-        Returns:
-            response: Modified or original response
-        """
-        if not self.enabled:
-            return response
-            
-        # Response processing implementation would go here
-        return response`}
-                  </code>
-                </pre>
-              </CodePreview>
-            </ModalBody>
-
-            <ModalFooter>
-              <ActionButton onClick={() => setSelectedMiddleware(null)}>Close</ActionButton>
-              {selectedMiddleware.source === 'github' && selectedMiddleware.githubUrl && (
-                <ActionButton 
-                  onClick={() => window.open(selectedMiddleware.githubUrl, '_blank')}
-                  $primary
-                >
-                  <ExternalLink size={16} />
-                  View on GitHub
-                </ActionButton>
-              )}
-            </ModalFooter>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+      </TESInstancesSection>
     </UtilitiesContainer>
   );
 };

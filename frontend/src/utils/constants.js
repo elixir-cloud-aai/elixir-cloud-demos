@@ -49,7 +49,7 @@ export const API_ENDPOINTS = {
   BATCH_SNAKEMAKE: '/batch_snakemake',
   BATCH_NEXTFLOW: '/batch_nextflow',
   BATCH_LOG: '/batch_log',
-  SERVICE_INFO: '/service_info',
+  SERVICE_INFO: '/api/service_info',
   STATUS: '/status',
   DEBUG_ENV: '/debug_env',
   TOPOLOGY_LOGS: '/api/topology_logs'
@@ -97,11 +97,15 @@ export const THEME = {
   DARK: '#343a40'
 };
 
-// TES Instances - These match the backend configuration
+// TES Instances - Loaded dynamically from backend, fallback static list
 export const TES_INSTANCES = [
-  { name: 'TESK Production', url: 'https://tesk-prod.cloud.e-infra.cz', id: 'elixir-cz' },
-  { name: 'TESK/OpenShift @ ELIXIR-FI', url: 'https://csc-tesk-noauth.rahtiapp.fi/ga4gh/tes', id: 'elixir-fi' },
-  { name: 'TESK/Kubernetes @ ELIXIR-GR', url: 'https://tesk.c3g.calculquebec.ca', id: 'elixir-gr' },
-  { name: 'TESK North America', url: 'https://tesk-na.cloud.e-infra.cz', id: 'elixir-ca' },
-  { name: 'Funnel/OpenPBS @ ELIXIR-CZ', url: 'https://funnel.cloud.e-infra.cz', id: 'funnel-cz' }
+  { name: 'Funnel/OpenPBS @ ELIXIR-CZ', url: 'https://funnel.cloud.e-infra.cz', id: 'funnel-cz' },
+  { name: 'Funnel/Slurm @ ELIXIR-FI', url: 'https://vm4816.kaj.pouta.csc.fi', id: 'funnel-fi' },
+  { name: 'TESK/Kubernetes @ ELIXIR-CZ (Prod)', url: 'https://tesk-prod.cloud.e-infra.cz', id: 'elixir-cz-prod' },
+  { name: 'TESK/Kubernetes @ ELIXIR-CZ (NA)', url: 'https://tesk-na.cloud.e-infra.cz', id: 'elixir-cz-na' },
+  { name: 'TESK/Kubernetes @ ELIXIR-DE', url: 'https://tesk.elixir-cloud.bi.denbi.de', id: 'elixir-de' },
+  { name: 'TESK/Kubernetes @ ELIXIR-GR', url: 'https://tesk-eu.hypatia-comp.athenarc.gr', id: 'elixir-gr' },
+  { name: 'TESK/OpenShift @ ELIXIR-FI', url: 'https://csc-tesk-noauth.rahtiapp.fi', id: 'elixir-fi' },
+  { name: 'TESK North America', url: 'https://tesk-na.cloud.e-infra.cz', id: 'tesk-na' },
+  { name: 'Local TES', url: 'http://localhost:8080', id: 'local-tes' }
 ];

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "elixir-cz",
+    "name": "TESK Production",
+    "url": "https://tesk-prod.cloud.e-infra.cz",
+    "country": "Czech Republic",
+    "ip": "147.251.124.194",
+    "lat": 49.75,
+    "lng": 15.5,
+    "lon": 15.5,
+    "status": "healthy",
+    "tasks": 15,
+    "workflows": 8,
+    "description": "Primary TESK production instance",
+    "capacity": {
+      "cpu": 1000,
+      "memory": "2TB",
+      "storage": "10TB"
+    },
+    "version": "v1.1.0",
+    "region": "EU-Central",
+    "latency": 45
+  },
+  {
+    "id": "elixir-fi",
+    "name": "TESK/OpenShift @ ELIXIR-FI",
+    "url": "https://csc-tesk-noauth.rahtiapp.fi/ga4gh/tes",
+    "country": "Finland",
+    "ip": "86.50.168.162",
+    "lat": 60.1699,
+    "lng": 24.9384,
+    "lon": 24.9384,
+    "status": "processing",
+    "tasks": 12,
+    "workflows": 5,
+    "description": "OpenShift-based TESK instance",
+    "capacity": {
+      "cpu": 800,
+      "memory": "1.5TB",
+      "storage": "8TB"
+    },
+    "version": "v1.0.8",
+    "region": "EU-North",
+    "latency": 62
+  },
+  {
+    "id": "elixir-gr",
+    "name": "TESK/Kubernetes @ ELIXIR-GR",
+    "url": "https://tesk.c3g.calculquebec.ca",
+    "country": "Greece",
+    "ip": "83.212.101.3",
+    "lat": 37.9838,
+    "lng": 23.7275,
+    "lon": 23.7275,
+    "status": "healthy",
+    "tasks": 8,
+    "workflows": 3,
+    "description": "Kubernetes-based TESK instance",
+    "capacity": {
+      "cpu": 600,
+      "memory": "1TB",
+      "storage": "5TB"
+    },
+    "version": "v1.1.2",
+    "region": "EU-South",
+    "latency": 78
+  },
+  {
+    "id": "elixir-ca",
+    "name": "TESK North America",
+    "url": "https://tesk-na.cloud.e-infra.cz",
+    "country": "Canada",
+    "ip": "192.168.1.100",
+    "lat": 45.4215,
+    "lng": -75.6972,
+    "lon": -75.6972,
+    "status": "healthy",
+    "tasks": 8,
+    "workflows": 4,
+    "description": "North American TESK instance",
+    "capacity": {
+      "cpu": 1200,
+      "memory": "2.5TB",
+      "storage": "12TB"
+    },
+    "version": "v1.1.1",
+    "region": "NA-East",
+    "latency": 95
+  },
+  {
+    "id": "funnel-cz",
+    "name": "Funnel/OpenPBS @ ELIXIR-CZ",
+    "url": "https://funnel.cloud.e-infra.cz",
+    "country": "Czech Republic",
+    "ip": "147.251.124.195",
+    "lat": 50.0755,
+    "lng": 14.4378,
+    "lon": 14.4378,
+    "status": "healthy",
+    "tasks": 20,
+    "workflows": 12,
+    "description": "Funnel with OpenPBS backend",
+    "capacity": {
+      "cpu": 1500,
+      "memory": "3TB",
+      "storage": "15TB"
+    },
+    "version": "v0.10.1",
+    "region": "EU-Central",
+    "latency": 38
+  }
+]

@@ -2,115 +2,110 @@
 import { apiClient } from './api';
 
 export const serviceInfoService = {
-  // Get service info for a TES instance
-  getServiceInfo: async (tesUrl) => {
+  // Get TES instances from dashboard
+  getTesInstances: async () => {
     try {
-      // First try to get real service info from the backend API
-      try {
-        console.log('Fetching service info for:', tesUrl);
-        const response = await apiClient.get('/api/service_info', {
-          params: { tes_url: tesUrl }
-        });
-        
-        if (response.data) {
-          console.log('Got real service info:', response.data);
-          return response.data;
-        }
-      } catch (apiError) {
-        console.warn('Failed to get real service info from /api/service_info, trying workaround:', apiError);
-        
-        // WORKAROUND: Try to access service_info through backend direct URL
-        try {
-          // Access backend directly since proxy isn't working
-          const backendUrl = 'https://tes-dashboard-backend-route-federated-analytics-showcase.2.rahtiapp.fi';
-          const directResponse = await fetch(`${backendUrl}/api/service_info?tes_url=${encodeURIComponent(tesUrl)}`);
-          
-          if (directResponse.ok) {
-            const serviceData = await directResponse.json();
-            console.log('✅ Got real service info via direct backend access:', serviceData);
-            return serviceData;
-          }
-        } catch (directError) {
-          console.warn('Direct backend access failed:', directError);
-        }
-      }
-      
-      // Fallback: Use dashboard data to get TES instances info
-      const dashboardResponse = await apiClient.get('/api/dashboard_data');
-      const dashboardData = dashboardResponse.data;
-      
-      // Find the TES instance info
-      const tesInstances = dashboardData.tes_instances || [];
-      const serviceInfo = tesInstances.find(instance => instance.url === tesUrl);
-      
-      if (serviceInfo) {
-        return {
-          name: serviceInfo.name,
-          version: serviceInfo.version || '1.1.0',
-          id: serviceInfo.id,
-          description: serviceInfo.description || 'TES service',
-          organization: {
-            name: 'Elixir Cloud',
-            url: 'https://elixir-cloud.dcc.sib.swiss/'
-          },
-          contactUrl: 'mailto:cloud-service@elixir-europe.org',
-          documentationUrl: 'https://ga4gh.github.io/task-execution-schemas/',
-          createdAt: '2023-01-01T00:00:00Z',
-          updatedAt: new Date().toISOString(),
-          environment: process.env.NODE_ENV || 'development',
-          type: {
-            group: 'org.ga4gh',
-            artifact: 'tes',
-            version: serviceInfo.version || '1.1.0'
-          }
-        };
-      }
-      
-      // Default service info if not found
-      return {
-        name: 'TES Service',
-        version: '1.1.0',
-        id: 'tes-service',
-        description: 'Task Execution Service',
-        organization: {
-          name: 'Elixir Cloud',
-          url: 'https://elixir-cloud.dcc.sib.swiss/'
-        },
-        contactUrl: 'mailto:cloud-service@elixir-europe.org',
-        documentationUrl: 'https://ga4gh.github.io/task-execution-schemas/',
-        createdAt: '2023-01-01T00:00:00Z',
-        updatedAt: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        type: {
-          group: 'org.ga4gh',
-          artifact: 'tes',
-          version: '1.1.0'
-        }
-      };
+      const response = await apiClient.get('/api/dashboard_data');
+      const tesInstances = response.data.tes_instances || [];
+      return tesInstances.map(instance => ({
+        name: instance.name,
+        url: instance.url,
+        id: instance.url.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+      }));
     } catch (error) {
-      console.error('Error fetching service info:', error);
+      console.error('Error fetching TES instances:', error);
       throw error;
     }
   },
 
-  // Get debug environment info
-  getDebugInfo: async () => {
+  // Get service info for a TES instance
+  getServiceInfo: async (tesUrl) => {
     try {
-      // Return debug info from dashboard data
-      const response = await apiClient.get('/api/dashboard_data');
-      const dashboardData = response.data;
+      console.log('Fetching service info for:', tesUrl);
       
-      return {
-        environment: process.env.NODE_ENV || 'development',
-        apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-        version: '1.0.0',
-        buildDate: new Date().toISOString(),
-        tesInstances: dashboardData.tes_instances?.length || 0,
-        tasks: dashboardData.tasks?.length || 0
-      };
+      // Try to get service info from the backend
+      const response = await apiClient.get('/api/service_info', {
+        params: { tes_url: tesUrl }
+      });
+      
+      if (response.data) {
+        console.log('Got service info response:', response.data);
+        
+        // Check if it's an error response
+        if (response.data.error) {
+          // Get TES instance name from dashboard for better display
+          const dashboardResponse = await apiClient.get('/api/dashboard_data');
+          const tesInstances = dashboardResponse.data.tes_instances || [];
+          const instanceInfo = tesInstances.find(instance => instance.url === tesUrl);
+          
+          // Return formatted info even for unavailable services
+          return {
+            name: instanceInfo?.name || 'Unknown Service',
+            url: tesUrl,
+            id: 'unavailable',
+            organization: {
+              name: 'Service Unavailable',
+              url: tesUrl
+            },
+            contactUrl: 'N/A',
+            documentationUrl: 'N/A',
+            type: {
+              group: 'ga4gh',
+              artifact: 'tes',
+              version: 'Unknown'
+            },
+            storage: ['Unknown'],
+            status: response.data.error,
+            message: response.data.message,
+            timestamp: response.data.timestamp
+          };
+        }
+        
+        return response.data;
+      }
+      
+      throw new Error('No response data received');
     } catch (error) {
-      console.error('Error fetching debug info:', error);
+      console.error('Error fetching service info:', error);
+      
+      // Handle 503 and other HTTP errors gracefully
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        
+        // Get TES instance name for better error display
+        try {
+          const dashboardResponse = await apiClient.get('/api/dashboard_data');
+          const tesInstances = dashboardResponse.data.tes_instances || [];
+          const instanceInfo = tesInstances.find(instance => instance.url === tesUrl);
+          
+          return {
+            name: instanceInfo?.name || 'Unknown Service',
+            url: tesUrl,
+            id: 'error',
+            organization: {
+              name: 'Service Error',
+              url: tesUrl
+            },
+            contactUrl: 'N/A',
+            documentationUrl: 'N/A',
+            type: {
+              group: 'ga4gh',
+              artifact: 'tes',
+              version: 'Unknown'
+            },
+            storage: ['Unknown'],
+            status: errorData.error || 'Service Error',
+            message: errorData.message || error.message,
+            timestamp: errorData.timestamp || new Date().toISOString()
+          };
+        } catch (dashboardError) {
+          throw new Error(`TES instance not found: ${tesUrl}`);
+        }
+      }
+      
       throw error;
     }
-  }
+  },
+
+
 };

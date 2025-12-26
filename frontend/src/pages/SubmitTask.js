@@ -209,12 +209,13 @@ const SubmitTask = () => {
       
 
       
-      // Test with fetch first
-      const fetchResponse = await fetch('http://localhost:8000/api/test_connection', {
+      // Test with fetch first (use API service)
+      const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+      const testUrl = apiBaseUrl ? `${apiBaseUrl}/api/test_connection` : '/api/test_connection';
+      const fetchResponse = await fetch(testUrl, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'Origin': 'http://localhost:3000'
         }
       });
       
@@ -348,15 +349,49 @@ const SubmitTask = () => {
     } catch (err) {
       console.error('Task submission error:', err);
       
-      // Extract error message from response
+      // Extract detailed error information from response
       let errorMessage = 'Failed to submit task';
-      if (err.response && err.response.data && err.response.data.message) {
-        errorMessage = err.response.data.message;
+      let errorReason = '';
+      let errorType = 'unknown';
+      let errorCode = '';
+      
+      if (err.response && err.response.data) {
+        const errorData = err.response.data;
+        errorMessage = errorData.error || errorData.message || errorMessage;
+        errorReason = errorData.reason || '';
+        errorType = errorData.error_type || errorType;
+        errorCode = errorData.error_code || '';
+        
+        // Build a comprehensive error message
+        if (errorReason) {
+          errorMessage = `${errorMessage}\n\nReason: ${errorReason}`;
+        }
+        
+        // Add instance information if available
+        if (errorData.tes_name) {
+          errorMessage = `${errorMessage}\n\nInstance: ${errorData.tes_name}`;
+        }
+        if (errorData.tes_url) {
+          errorMessage = `${errorMessage}\nURL: ${errorData.tes_url}`;
+        }
       } else if (err.message) {
         errorMessage = err.message;
       }
       
-      setError(new Error(errorMessage));
+      // Create error object with additional details
+      const detailedError = new Error(errorMessage);
+      detailedError.reason = errorReason;
+      detailedError.errorType = errorType;
+      detailedError.errorCode = errorCode;
+      
+      setError(detailedError);
+      
+      // Show alert with detailed error information
+      let alertMessage = `❌ Task Submission Failed\n\n${errorMessage}`;
+      if (errorCode) {
+        alertMessage = `❌ Task Submission Failed (${errorCode})\n\n${errorMessage}`;
+      }
+      alert(alertMessage);
     } finally {
       setSubmitting(false);
     }

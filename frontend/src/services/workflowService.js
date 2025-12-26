@@ -61,10 +61,33 @@ export const workflowService = {
       const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
-      // Return workflow runs from dashboard data
-      return dashboardData.workflow_runs || [];
+      const workflowRuns = dashboardData.workflow_runs || [];
+      
+      // Filter out workflow runs from unhealthy or error-prone instances
+      const healthyWorkflowRuns = workflowRuns.filter(run => {
+        return run && 
+               run.run_id && 
+               run.tes_url &&
+               run.status &&
+               // Filter out error states that indicate problematic instances
+               !run.connection_error &&
+               !run.timeout_error &&
+               run.status !== 'CONNECTION_ERROR' &&
+               run.status !== 'TIMEOUT_ERROR' &&
+               run.status !== 'SYSTEM_ERROR';
+      });
+      
+      console.log(`WorkflowService: Filtered ${healthyWorkflowRuns.length} healthy workflow runs out of ${workflowRuns.length} total`);
+      return healthyWorkflowRuns;
     } catch (error) {
       console.error('Error fetching workflow runs:', error);
+      
+      // Handle timeout and connectivity errors gracefully
+      if (error.response?.status === 504 || error.response?.status === 503) {
+        console.warn('External services timeout/unavailable, returning empty workflow runs');
+        return [];
+      }
+      
       throw error;
     }
   }

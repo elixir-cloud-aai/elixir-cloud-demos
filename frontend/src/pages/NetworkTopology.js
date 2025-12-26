@@ -761,207 +761,13 @@ const MapOverlay = styled.div`
   }
 `;
 
-// Enhanced TES instances with more geographic locations and details
-const TES_LOCATIONS = [
-  {
-    id: 'elixir-cz',
-    name: 'TESK Production',
-    country: 'Czech Republic',
-    status: 'healthy',
-    lat: 49.75,
-    lng: 15.5,
-    tasks: 15,
-    workflows: 8,
-    url: 'https://tesk-prod.cloud.e-infra.cz',
-    description: 'Primary TESK production instance',
-    capacity: { cpu: 1000, memory: '2TB', storage: '10TB' },
-    version: 'v1.1.0',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'elixir-fi',
-    name: 'TESK/OpenShift @ ELIXIR-FI',
-    country: 'Finland',
-    status: 'processing',
-    lat: 60.1699,
-    lng: 24.9384,
-    tasks: 12,
-    workflows: 5,
-    url: 'https://csc-tesk-noauth.rahtiapp.fi/ga4gh/tes',
-    description: 'OpenShift-based TESK instance',
-    capacity: { cpu: 800, memory: '1.5TB', storage: '8TB' },
-    version: 'v1.0.8',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'elixir-gr',
-    name: 'TESK/Kubernetes @ ELIXIR-GR',
-    country: 'Greece',
-    status: 'healthy',
-    lat: 37.9838,
-    lng: 23.7275,
-    tasks: 8,
-    workflows: 3,
-    url: 'https://tesk.c3g.calculquebec.ca',
-    description: 'Kubernetes-based TESK instance',
-    capacity: { cpu: 600, memory: '1TB', storage: '5TB' },
-    version: 'v1.1.2',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'elixir-ca',
-    name: 'TESK North America',
-    country: 'Canada',
-    status: 'healthy',
-    lat: 45.4215,
-    lng: -75.6972,
-    tasks: 8,
-    workflows: 4,
-    url: 'https://tesk-na.cloud.e-infra.cz',
-    description: 'North American TESK instance',
-    capacity: { cpu: 1200, memory: '2.5TB', storage: '12TB' },
-    version: 'v1.1.1',
-    region: 'North America',
-    instanceType: 'compute'
-  },
-  {
-    id: 'funnel-cz',
-    name: 'Funnel/OpenPBS @ ELIXIR-CZ',
-    country: 'Czech Republic',
-    status: 'healthy',
-    lat: 50.0755,
-    lng: 14.4378,
-    tasks: 20,
-    workflows: 12,
-    url: 'https://funnel.cloud.e-infra.cz',
-    description: 'Funnel with OpenPBS backend',
-    capacity: { cpu: 1500, memory: '3TB', storage: '15TB' },
-    version: 'v0.10.1',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'funnel-fi',
-    name: 'Funnel/Slurm @ ELIXIR-FI',
-    country: 'Finland',
-    status: 'processing',
-    lat: 61.4978,
-    lng: 23.7610,
-    tasks: 16,
-    workflows: 9,
-    url: 'https://vm4816.kaj.pouta.csc.fi',
-    description: 'Funnel with Slurm backend',
-    capacity: { cpu: 900, memory: '1.8TB', storage: '9TB' },
-    version: 'v0.10.0',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'tes-gateway',
-    name: 'TES Gateway',
-    country: 'Global',
-    status: 'healthy',
-    lat: 51.5074,
-    lng: -0.1278,
-    tasks: 45,
-    workflows: 25,
-    url: 'https://tes.prodrun.cloud',
-    description: 'Central TES Gateway for federated execution',
-    capacity: { cpu: 2000, memory: '4TB', storage: '20TB' },
-    version: 'v2.0.0',
-    region: 'Global',
-    instanceType: 'gateway'
-  },
-  {
-    id: 'elixir-nl',
-    name: 'TESK @ SURF',
-    country: 'Netherlands',
-    status: 'healthy',
-    lat: 52.3667,
-    lng: 4.8945,
-    tasks: 10,
-    workflows: 6,
-    url: 'https://tesk.surf.nl/ga4gh/tes',
-    description: 'SURF-hosted TESK instance',
-    capacity: { cpu: 700, memory: '1.2TB', storage: '6TB' },
-    version: 'v1.0.9',
-    region: 'Europe',
-    instanceType: 'compute'
-  },
-  {
-    id: 'elixir-uk',
-    name: 'TESK @ EBI',
-    country: 'United Kingdom',
-    status: 'processing',
-    lat: 52.0799,
-    lng: 0.1827,
-    tasks: 14,
-    workflows: 7,
-    url: 'https://tes.ebi.ac.uk/ga4gh/tes',
-    description: 'EBI-hosted TESK instance',
-    capacity: { cpu: 1100, memory: '2.2TB', storage: '11TB' },
-    version: 'v1.1.0',
-    region: 'Europe',
-    instanceType: 'compute'
-  }
-];
-
-// Storage locations with accurate geographic coordinates
-const STORAGE_LOCATIONS = [
-  {
-    id: 'storage-eu-central',
-    name: 'EU Central Storage',
-    type: 'S3',
-    location: 'Frankfurt, Germany',
-    lat: 50.1109,
-    lng: 8.6821,
-    capacity: '500TB',
-    usage: 65,
-    connections: ['elixir-cz', 'funnel-cz', 'elixir-gr']
-  },
-  {
-    id: 'storage-eu-north',
-    name: 'EU North Storage',
-    type: 'MinIO',
-    location: 'Stockholm, Sweden',
-    lat: 59.3293,
-    lng: 18.0686,
-    capacity: '300TB',
-    usage: 45,
-    connections: ['elixir-fi', 'funnel-fi']
-  },
-  {
-    id: 'storage-na-east',
-    name: 'NA East Storage',
-    type: 'S3',
-    location: 'Virginia, USA',
-    lat: 39.0458,
-    lng: -76.6413,
-    capacity: '800TB',
-    usage: 78,
-    connections: ['elixir-ca']
-  },
-  {
-    id: 'storage-global',
-    name: 'Global Cache Hub',
-    type: 'MinIO',
-    location: 'London, UK',
-    lat: 51.5074,
-    lng: -0.1278,
-    capacity: '2PB',
-    usage: 34,
-    connections: ['tes-gateway', 'elixir-uk', 'elixir-nl']
-  }
-];
-
 const NetworkTopology = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [instances, setInstances] = useState([]);
-  const [storageLocations, setStorageLocations] = useState(STORAGE_LOCATIONS);
+  // Storage locations are currently static, but kept separate from TES instances.
+  // You can later move these to a backend endpoint if you want them to be fully dynamic.
+  const [storageLocations, setStorageLocations] = useState([]);
   const [workflowPaths, setWorkflowPaths] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
   const [showConnections, setShowConnections] = useState(true);
@@ -973,7 +779,8 @@ const NetworkTopology = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRegion, setFilterRegion] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [realTimePolling, setRealTimePolling] = useState(true);
+  // Disable automatic polling by default; user can toggle it on from the UI if desired
+  const [realTimePolling, setRealTimePolling] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [dataTransfers, setDataTransfers] = useState([]);
   const [realTimeData, setRealTimeData] = useState({
@@ -989,81 +796,75 @@ const NetworkTopology = () => {
       setLoading(true);
       setError('');
 
-      // Load data from backend API
+      // Load real-time data from backend APIs only
       const [locationsResponse, dashboardResponse] = await Promise.all([
         api.get('/api/tes_locations'),
         api.get('/api/dashboard_data')
       ]);
 
-      const locations = locationsResponse.data;
-      const dashboardData = dashboardResponse.data;
-      
-      // Merge with static TES_LOCATIONS for enhanced data
-      const enhancedInstances = TES_LOCATIONS.map(staticLocation => {
-        const apiLocation = locations.find(loc => 
-          loc.name.toLowerCase().includes(staticLocation.name.toLowerCase().split(' ')[0].toLowerCase())
-        );
-        
-        return {
-          ...staticLocation,
-          ...apiLocation,
-          id: staticLocation.id,
-          taskCount: Math.floor(Math.random() * 25) + 5,
-          lastChecked: new Date().toISOString(),
-          latency: Math.floor(Math.random() * 100) + 20,
-          cpuUsage: Math.floor(Math.random() * 80) + 10,
-          memoryUsage: Math.floor(Math.random() * 70) + 15,
-          activeConnections: Math.floor(Math.random() * 10) + 1,
-          throughput: `${(Math.random() * 100).toFixed(1)} MB/s`,
-          uptime: `${Math.floor(Math.random() * 100)}%`
-        };
-      });
+      const locations = Array.isArray(locationsResponse.data) ? locationsResponse.data : [];
+      const dashboardData = dashboardResponse.data || {};
+
+      // Use backend-provided TES instance data directly and normalise fields
+      const enhancedInstances = locations.map((loc, idx) => ({
+        id: loc.id || `instance-${idx}`,
+        name: loc.name || loc.tes_name || loc.url || `Instance ${idx + 1}`,
+        country: loc.country || 'Unknown',
+        status: loc.status || 'unreachable',
+        lat: loc.lat,
+        lng: loc.lng,
+        url: loc.url,
+        region: loc.region || 'Unknown',
+        instanceType: loc.instanceType || 'compute',
+        version: loc.version || 'unknown',
+        // Metrics coming directly or derived from backend
+        taskCount: loc.taskCount != null ? loc.taskCount : (loc.tasks || 0),
+        cpuUsage: loc.cpuUsage != null ? loc.cpuUsage : 0,
+        memoryUsage: loc.memoryUsage != null ? loc.memoryUsage : 0,
+        latency: loc.latency != null ? loc.latency : 0,
+        throughput: loc.throughput || 'N/A',
+        uptime: loc.uptime || 'N/A',
+      }));
 
       setInstances(enhancedInstances);
-      
-      // Process workflow paths with enhanced tracking
+
+      // Process workflow paths from real dashboard data (no random simulation)
+      const batchRuns = Array.isArray(dashboardData.batch_runs) ? dashboardData.batch_runs : [];
+      const workflowRuns = Array.isArray(dashboardData.workflow_runs) ? dashboardData.workflow_runs : [];
+
       const allWorkflows = [
-        ...dashboardData.batch_runs.map(run => ({
+        ...batchRuns.map(run => ({
           id: run.run_id,
           type: run.workflow_type,
-          name: `${run.workflow_type.toUpperCase()} - ${run.tes_name}`,
+          name: `${(run.workflow_type || 'workflow').toUpperCase()} - ${run.tes_name}`,
           status: run.status,
           tes_name: run.tes_name,
           submitted_at: run.submitted_at,
           mode: run.mode,
-          progress: Math.floor(Math.random() * 100),
-          dataSize: `${(Math.random() * 10).toFixed(1)} GB`,
-          estimatedTime: `${Math.floor(Math.random() * 120)} min`
         })),
-        ...dashboardData.workflow_runs.map(run => ({
+        ...workflowRuns.map(run => ({
           id: run.run_id,
           type: run.type,
-          name: `${run.type.toUpperCase()} - ${run.tes_name}`,
+          name: `${(run.type || 'workflow').toUpperCase()} - ${run.tes_name}`,
           status: run.status,
           tes_name: run.tes_name,
-          submitted_at: new Date().toISOString(),
-          progress: Math.floor(Math.random() * 100),
-          dataSize: `${(Math.random() * 5).toFixed(1)} GB`,
-          estimatedTime: `${Math.floor(Math.random() * 60)} min`
+          submitted_at: run.submitted_at,
         }))
       ];
-      
+
       setWorkflowPaths(allWorkflows);
 
-      // Simulate data transfers
-      const transfers = generateDataTransfers(enhancedInstances, storageLocations);
-      setDataTransfers(transfers);
-
-      // Update real-time stats
+      // Real-time stats derived only from live data
       const totalStorage = storageLocations.reduce((sum, storage) => {
-        const capacityNum = parseFloat(storage.capacity.replace(/[^\d.]/g, ''));
-        const unit = storage.capacity.includes('PB') ? 1000 : 1;
-        return sum + capacityNum * unit;
+        if (!storage.capacity) return sum;
+        const capacityNum = parseFloat(String(storage.capacity).replace(/[^\d.]/g, '')) || 0;
+        const unitMultiplier = String(storage.capacity).includes('PB') ? 1000 : 1;
+        return sum + capacityNum * unitMultiplier;
       }, 0);
 
       setRealTimeData({
         activeInstances: enhancedInstances.filter(i => i.status === 'healthy').length,
-        totalTasks: enhancedInstances.reduce((sum, inst) => sum + inst.taskCount, 0),
+        totalTasks: enhancedInstances.reduce((sum, inst) => sum + (inst.taskCount || 0), 0),
         totalWorkflows: allWorkflows.length,
         totalStorage: totalStorage,
         lastUpdated: new Date()
@@ -1078,19 +879,22 @@ const NetworkTopology = () => {
     } finally {
       setLoading(false);
     }
-  }, [storageLocations]); // Add dependencies for useCallback
+  }, []); // Only load once on mount, no dependencies to prevent re-renders
 
   useEffect(() => {
     loadNetworkTopology();
-  }, [loadNetworkTopology]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Load only once when component mounts
 
+  // Optional real-time refresh; now opt-in via the toggle button
   useEffect(() => {
-    if (realTimePolling) {
-      const interval = setInterval(() => {
-        loadNetworkTopology();
-      }, 15000); // 15 seconds
-      return () => clearInterval(interval);
-    }
+    if (!realTimePolling) return;
+
+    const interval = setInterval(() => {
+      loadNetworkTopology();
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(interval);
   }, [realTimePolling, loadNetworkTopology]);
 
   // Generate simulated data transfers
@@ -1672,10 +1476,15 @@ const ConnectionLine = styled.div`
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
               
-              {instances.map((instance) => (
-                instance.lat && instance.lng && (
+              {instances.map((instance) => {
+                // Only show instances with valid coordinates (not 0,0 or null)
+                const hasValidCoords = instance.lat && instance.lng && 
+                                      (instance.lat !== 0 || instance.lng !== 0);
+                if (!hasValidCoords) return null;
+                
+                return (
                   <Marker
-                    key={instance.id}
+                    key={instance.id || `${instance.name}-${instance.url}`}
                     position={[instance.lat, instance.lng]}
                     icon={createTESIcon(
                       instance.status, 
@@ -1724,8 +1533,8 @@ const ConnectionLine = styled.div`
                       </div>
                     </Popup>
                   </Marker>
-                )
-              ))}
+                );
+              })}
 
               {/* Storage locations */}
               {storageLocations.map((storage) => (
@@ -1869,7 +1678,7 @@ const ConnectionLine = styled.div`
 
           <TabContainer>
             <Tab
-              active={activeTab === 'instances'}
+              active={activeTab === 'instances' ? "true" : undefined}
               onClick={() => setActiveTab('instances')}
             >
               <Server size={14} />
@@ -1907,7 +1716,7 @@ const ConnectionLine = styled.div`
                 ) : (
                   filteredInstances.map((instance) => (
                     <InstanceCard
-                      key={instance.id}
+                      key={instance.id || `${instance.name}-${instance.url}`}
                       selected={selectedInstance?.id === instance.id}
                       onClick={() => setSelectedInstance(instance)}
                     >

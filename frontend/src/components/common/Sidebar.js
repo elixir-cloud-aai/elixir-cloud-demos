@@ -11,7 +11,6 @@ import {
   Server,
   FileText,
   BarChart3,
-  Network,
   Wrench,
   Shield
 } from 'lucide-react';
@@ -117,14 +116,9 @@ const Sidebar = () => {
 
       <NavSection>
         <SectionTitle>Utilities</SectionTitle>
-        <NavItem to="/utilities" $isActive={isActive('/utilities')}>
+        <NavItem to="/utilities" $isActive={isActive('/utilities') || isActive('/instances')}>
           <NavIcon><Wrench size={18} /></NavIcon>
-          <NavText>Service Status</NavText>
-        </NavItem>
-        
-        <NavItem to="/instances" $isActive={isActive('/instances')}>
-          <NavIcon><Network size={18} /></NavIcon>
-          <NavText>Instance Management</NavText>
+          <NavText>Utilities & Instances</NavText>
         </NavItem>
         
         <NavItem to="/api-test" $isActive={isActive('/api-test')}>

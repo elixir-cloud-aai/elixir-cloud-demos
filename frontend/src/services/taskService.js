@@ -2,7 +2,7 @@ import api from './api';
 
 // Task-related API functions
 export const taskService = {
-  // Get task details with comprehensive information
+  
   getTaskDetails: async (tesUrl, taskId, viewLevel = 'FULL') => {
     try {
       const response = await api.get('/api/task_details', {
@@ -15,6 +15,35 @@ export const taskService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching task details:', error);
+      
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED') {
+        throw new Error(`Timeout: TES instance ${tesUrl} is taking too long to respond. The task details may be available later.`);
+      }
+      
+      // Handle backend timeout responses (504)
+      if (error.response?.status === 504) {
+        const errorData = error.response?.data;
+        if (errorData?.error_code === 'TIMEOUT') {
+          throw new Error(`TES instance timeout: ${errorData.error} (waited ${errorData.timeout})`);
+        }
+        throw new Error(`TES instance taking too long to respond`);
+      }
+      
+      // Handle backend connection errors (503)
+      if (error.response?.status === 503) {
+        const errorData = error.response?.data;
+        if (errorData?.error_code === 'CONNECTION_ERROR') {
+          throw new Error(`TES instance unavailable: ${errorData.error}`);
+        }
+        throw new Error(`TES instance temporarily unavailable`);
+      }
+      
+      // Handle other server errors
+      if (error.response?.status === 500) {
+        throw new Error(`Server error when fetching task ${taskId} from ${tesUrl}. The TES instance may be temporarily unavailable.`);
+      }
+      
       throw error;
     }
   },
@@ -22,8 +51,6 @@ export const taskService = {
   // Submit a new task
   submitTask: async (taskData) => {
     try {
-      console.log('TaskService: Submitting task with data:', taskData);
-      
       const response = await api.post('/api/submit_task', taskData, {
         headers: {
           'Content-Type': 'application/json',
@@ -31,10 +58,9 @@ export const taskService = {
         },
       });
       
-      console.log('TaskService: Success response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('TaskService: Error submitting task:', error);
+      console.error('TaskService: Error submitting task:', error.message);
       console.error('TaskService: Error details:', {
         message: error.message,
         response: error.response?.data,
@@ -64,39 +90,84 @@ export const taskService = {
     }
   },
 
-  // List all tasks
+  // List all tasks and return dashboard data to avoid duplicate API calls
   listTasks: async () => {
     try {
       // Get tasks from dashboard data which includes submitted_tasks
       const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
-      console.log('TaskService: Dashboard data received:', dashboardData);
-      
-      // Get tasks and transform them to match frontend expectations
+
       const backendTasks = dashboardData.tasks || [];
-      console.log('TaskService: Raw backend tasks:', backendTasks);
       
-      // Transform backend task format to frontend format
-      const tasks = backendTasks.map(task => ({
-        id: task.task_id,
-        name: task.task_name || task.tes_name || 'Custom Task',
-        state: task.status || 'UNKNOWN',
-        tes_url: task.tes_url,
-        type: task.type,
-        creation_time: task.creation_time || new Date().toISOString(),
-        end_time: task.end_time,
-        // Add any additional fields that might be useful
-        tes_name: task.tes_name,
-        task_name: task.task_name
-      }));
+
+      let tasks = [];
+      try {
+        tasks = backendTasks
+          .filter(task => {
+            return task && 
+                   task.task_id && 
+                   task.tes_url && 
+                   task.status &&
+                   !task.connection_error &&
+                   !task.timeout_error &&
+                   task.status !== 'CONNECTION_ERROR' &&
+                   task.status !== 'TIMEOUT_ERROR';
+          })
+          .map(task => ({
+            id: task.task_id,
+            name: task.task_name || task.tes_name || 'Custom Task',
+            state: task.status || 'UNKNOWN',
+            tes_url: task.tes_url,
+            type: task.type,
+            creation_time: task.creation_time || new Date().toISOString(),
+            end_time: task.end_time,
+            tes_name: task.tes_name,
+            task_name: task.task_name,
+            instance_healthy: true
+          }));
+      } catch (taskError) {
+        console.error('TaskService: Error transforming tasks, using empty array:', taskError);
+        tasks = [];
+      }
       
-      console.log('TaskService: Transformed tasks:', tasks);
+      const result = { 
+        tasks, 
+        dashboardData: {
+          ...dashboardData,
+          instances_count: dashboardData.instances_count || dashboardData.tes_instances?.length || 0
+        }
+      };
       
-      return tasks;
+      return result;
     } catch (error) {
-      console.error('Error listing tasks:', error);
-      throw error;
+      console.error('TaskService: Error listing tasks:', error);
+      
+
+      if (error.response?.status === 504) {
+
+        console.warn('TaskService: External TES instances timed out, returning partial data');
+        return { 
+          tasks: [], 
+          dashboardData: { 
+            message: 'Some external services are responding slowly',
+            partial_data: true 
+          } 
+        };
+      } else if (error.response?.status === 503) {
+        console.warn('TaskService: External TES instances unavailable, returning partial data');
+        return { 
+          tasks: [], 
+          dashboardData: { 
+            message: 'Some external services are temporarily unavailable',
+            partial_data: true 
+          } 
+        };
+      }
+      
+
+      console.error('TaskService: Returning empty array due to error:', error.message);
+      return [];
     }
   },
 
@@ -121,17 +192,12 @@ export const taskService = {
       throw error;
     }
   },
-
-  // Get dashboard data
   getDashboardData: async () => {
-    try {
-      const response = await api.get('/api/dashboard_data');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      throw error;
-    }
-  }
+    const response = await api.get('/api/dashboard_data');
+    return response.data;
+  },
+
+
 };
 
 export default taskService;

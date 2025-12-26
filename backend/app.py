@@ -129,10 +129,97 @@ BATCH_RUNS_FILE = os.path.join(app.config['UPLOAD_FOLDER'], 'batch_runs.json')
 
 # Load TES instance locations for map visualization
 TES_LOCATIONS_FILE = Path(__file__).parent / 'tes_instance_locations.json'
-tes_locations = []
-if TES_LOCATIONS_FILE.exists():
-    with open(TES_LOCATIONS_FILE) as f:
-        tes_locations = json.load(f)
+
+def load_tes_location_data():
+    """
+    Merge TES instances from .tes_instances with location data from tes_instance_locations.json.
+    Uses .tes_instances as source of truth for which instances exist, and enriches with location data.
+    """
+    # Default coordinates by country/region
+    default_coords = {
+        'Czech Republic': {'lat': 49.8175, 'lng': 15.4730, 'region': 'EU-Central'},
+        'Finland': {'lat': 61.9241, 'lng': 25.7482, 'region': 'EU-North'},
+        'Greece': {'lat': 39.0742, 'lng': 21.8243, 'region': 'EU-South'},
+        'Germany': {'lat': 51.1657, 'lng': 10.4515, 'region': 'EU-Central'},
+        'Canada': {'lat': 56.1304, 'lng': -106.3468, 'region': 'North America'},
+        'Local': {'lat': 0, 'lng': 0, 'region': 'Local'},
+    }
+    
+    # Load location data from JSON if available
+    location_map = {}
+    try:
+        if TES_LOCATIONS_FILE.exists():
+            with open(TES_LOCATIONS_FILE) as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    for loc in data:
+                        # Index by URL (normalized) and name for matching
+                        url_key = loc.get('url', '').rstrip('/').lower()
+                        name_key = loc.get('name', '').lower()
+                        location_map[url_key] = loc
+                        location_map[name_key] = loc
+    except Exception as e:
+        app.logger.warning(f"Failed to load tes_instance_locations.json: {e}")
+
+    # Build instances from TES_INSTANCES (source of truth) and enrich with location data
+    enriched_instances = []
+    seen_ids = set()  # Track IDs to ensure uniqueness
+    
+    for idx, inst in enumerate(TES_INSTANCES):
+        inst_name = inst.get('name', '')
+        inst_url = inst.get('url', '').rstrip('/')
+        url_key = inst_url.lower()
+        
+        # Try to find matching location data
+        location_data = location_map.get(url_key) or location_map.get(inst_name.lower())
+        
+        # Determine country and region from name or location data
+        country = 'Unknown'
+        if 'CZ' in inst_name or 'Czech' in inst_name:
+            country = 'Czech Republic'
+        elif 'FI' in inst_name or 'Finland' in inst_name:
+            country = 'Finland'
+        elif 'GR' in inst_name or 'Greece' in inst_name:
+            country = 'Greece'
+        elif 'DE' in inst_name or 'Germany' in inst_name or 'denbi' in inst_url.lower():
+            country = 'Germany'
+        elif 'NA' in inst_name or 'North America' in inst_name or 'calculquebec' in inst_url.lower():
+            country = 'Canada'
+        elif 'localhost' in inst_url.lower():
+            country = 'Local'
+        
+        # Get coordinates from location data or defaults
+        coords = default_coords.get(country, {'lat': 0, 'lng': 0, 'region': 'Unknown'})
+        
+        # Generate unique ID - use location data ID if available, otherwise generate from name
+        # If ID already exists, append index to ensure uniqueness
+        base_id = location_data.get('id') if location_data else inst_name.lower().replace(' ', '-').replace('@', '').replace('(', '').replace(')', '').replace('/', '-').replace(' ', '-')
+        
+        # Ensure ID is unique by appending index if needed
+        instance_id = base_id
+        counter = 0
+        while instance_id in seen_ids:
+            counter += 1
+            instance_id = f"{base_id}-{counter}"
+        seen_ids.add(instance_id)
+        
+        # Build enriched instance
+        enriched = {
+            'id': instance_id,
+            'name': inst_name,
+            'url': inst_url,
+            'lat': location_data.get('lat') if location_data and location_data.get('lat') else coords['lat'],
+            'lng': location_data.get('lng') if location_data and location_data.get('lng') else coords['lng'],
+            'lon': location_data.get('lng') if location_data and location_data.get('lng') else coords['lng'],
+            'country': location_data.get('country') if location_data else country,
+            'region': location_data.get('region') if location_data else coords['region'],
+            'status': location_data.get('status', 'unknown') if location_data else 'unknown',
+            'description': location_data.get('description', inst_name) if location_data else inst_name,
+            'instanceType': location_data.get('instanceType', 'compute') if location_data else 'compute',
+        }
+        enriched_instances.append(enriched)
+    
+    return enriched_instances
 
 def load_batch_runs():
     if os.path.exists(BATCH_RUNS_FILE):
@@ -385,18 +472,101 @@ def get_batch_runs():
     """Get batch runs"""
     return jsonify(batch_runs)
 
-@app.route('/api/tes_locations', methods=['GET'])
-def get_tes_locations():
-    """Get TES instance locations for map visualization"""
-    return jsonify(tes_locations)
+@app.route('/api/tes_locations')
+def tes_locations():
+    """
+    Return real-time TES instance information.
+
+    This endpoint:
+      - Uses the configured TES instances (from tes_instance_locations.json / TES_INSTANCES)
+      - Performs a live /service-info call against each instance
+      - Enriches the response with simple real-time metrics derived from the dashboard state
+    """
+    import requests
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Helper that queries the TES instance and augments it with live metrics
+    def fetch_status(instance):
+        try:
+            tes_base_url = instance.get("url", "").rstrip("/")
+            if not tes_base_url:
+                return {**instance, "status": "unreachable"}
+
+            start_time = time.time()
+            r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            status = "healthy" if r.status_code == 200 else "unhealthy"
+            version = ""
+            try:
+                version = r.json().get("version", "")
+            except Exception:
+                # If the body is not JSON, keep version empty
+                version = ""
+
+            # Derive a simple per-instance task count from the in‑memory submitted_tasks list
+            tasks_for_instance = 0
+            try:
+                base_url_normalized = tes_base_url.rstrip("/")
+                tasks_for_instance = sum(
+                    1
+                    for t in submitted_tasks
+                    if isinstance(t, dict)
+                    and t.get("tes_url", "").rstrip("/") == base_url_normalized
+                )
+            except Exception as e:
+                app.logger.warning(f"Failed to count tasks for instance {tes_base_url}: {e}")
+
+            # Basic live metrics – kept intentionally simple and derived from available data
+            enriched = {
+                **instance,
+                "status": status,
+                "version": version,
+                "latency": latency_ms,
+                "tasks": tasks_for_instance,
+                # These can be refined later if you introduce real metrics
+                "taskCount": tasks_for_instance,
+                "cpuUsage": 0,
+                "memoryUsage": 0,
+                "throughput": "N/A",
+                "uptime": "N/A",
+                "last_checked": datetime.utcnow().isoformat() + "Z",
+            }
+            return enriched
+        except Exception as e:
+            app.logger.warning(f"TES location check failed for {instance.get('url')}: {e}")
+            return {
+                **instance,
+                "status": "unreachable",
+                "latency": None,
+                "tasks": 0,
+                "taskCount": 0,
+                "cpuUsage": 0,
+                "memoryUsage": 0,
+                "throughput": "N/A",
+                "uptime": "N/A",
+                "last_checked": datetime.utcnow().isoformat() + "Z",
+            }
+
+    # Load the configured TES instances (prefer rich location data if available) and enrich them with live status
+    instances = load_tes_location_data()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(fetch_status, instances))
+
+    return jsonify(results)
 
 @app.route('/api/service_info', methods=['GET'])
 def get_service_info():
-    """Get TES service info for a specific instance"""
+    """Get TES service info for a specific instance with detailed error categorization"""
     try:
         tes_url = request.args.get('tes_url')
         if not tes_url:
-            return jsonify({'error': 'tes_url parameter is required'}), 400
+            return jsonify({
+                'error': 'tes_url parameter is required',
+                'error_code': 'MISSING_PARAMETER',
+                'error_type': 'validation_error'
+            }), 400
         
         # Try to get real service info from the TES instance
         try:
@@ -405,30 +575,91 @@ def get_service_info():
             response = requests.get(service_info_url, timeout=10)
             if response.status_code == 200:
                 return jsonify(response.json())
+            else:
+                # Non-200 status code
+                error_info = {
+                    'error': f'Service returned status {response.status_code}',
+                    'error_code': 'SERVICE_ERROR',
+                    'error_type': 'service_error',
+                    'message': f'TES instance service-info returned status {response.status_code}',
+                    'reason': 'The TES instance is responding but not functioning correctly',
+                    'tes_url': tes_url,
+                    'status_code': response.status_code
+                }
+                return jsonify(error_info), 503
+        except requests.exceptions.Timeout:
+            return jsonify({
+                'error': 'Connection timeout - TES instance did not respond within 10 seconds',
+                'error_code': 'TIMEOUT',
+                'error_type': 'timeout',
+                'message': 'Connection timeout',
+                'reason': 'The TES instance may be overloaded, offline, or unreachable',
+                'tes_url': tes_url
+            }), 503
+        except requests.exceptions.ConnectionError as conn_err:
+            error_str = str(conn_err).lower()
+            if 'name resolution' in error_str or 'nodename' in error_str or 'servname' in error_str:
+                return jsonify({
+                    'error': 'DNS resolution failed - Cannot resolve TES instance hostname',
+                    'error_code': 'DNS_ERROR',
+                    'error_type': 'dns_error',
+                    'message': 'DNS resolution failed',
+                    'reason': f'The hostname "{tes_url}" cannot be resolved. Check if the URL is correct.',
+                    'tes_url': tes_url
+                }), 503
+            elif 'connection refused' in error_str or 'refused' in error_str:
+                return jsonify({
+                    'error': 'Connection refused - TES instance is not accepting connections',
+                    'error_code': 'CONNECTION_REFUSED',
+                    'error_type': 'connection_refused',
+                    'message': 'Connection refused',
+                    'reason': 'The TES instance may be offline, the port may be blocked, or the service may not be running',
+                    'tes_url': tes_url
+                }), 503
+            elif 'ssl' in error_str or 'certificate' in error_str:
+                return jsonify({
+                    'error': 'SSL/TLS certificate error',
+                    'error_code': 'SSL_ERROR',
+                    'error_type': 'ssl_error',
+                    'message': 'SSL/TLS certificate error',
+                    'reason': 'There is a problem with the SSL certificate. The connection may be insecure or the certificate is invalid.',
+                    'tes_url': tes_url
+                }), 503
+            else:
+                return jsonify({
+                    'error': f'Connection error - Cannot reach TES instance: {str(conn_err)}',
+                    'error_code': 'CONNECTION_ERROR',
+                    'error_type': 'connection_error',
+                    'message': 'Connection error',
+                    'reason': 'Network connectivity issue. Check if the TES instance is accessible.',
+                    'tes_url': tes_url
+                }), 503
+        except requests.exceptions.SSLError as ssl_err:
+            return jsonify({
+                'error': 'SSL/TLS certificate verification failed',
+                'error_code': 'SSL_ERROR',
+                'error_type': 'ssl_error',
+                'message': 'SSL/TLS certificate verification failed',
+                'reason': f'SSL error: {str(ssl_err)}',
+                'tes_url': tes_url
+            }), 503
         except Exception as e:
             print(f"Failed to get real service info from {tes_url}: {e}")
+            return jsonify({
+                'error': f'Unexpected error: {str(e)}',
+                'error_code': 'UNKNOWN_ERROR',
+                'error_type': 'unknown_error',
+                'message': 'Unexpected error occurred',
+                'reason': 'An unexpected error occurred while connecting to the TES instance',
+                'tes_url': tes_url
+            }), 503
         
-        # Fallback: return mock service info
+    except Exception as e:
         return jsonify({
-            "id": "tes-service",
-            "name": "Task Execution Service",
-            "type": {
-                "group": "org.ga4gh",
-                "artifact": "tes",
-                "version": "1.1.0"
-            },
-            "description": "TES service for task execution",
-            "organization": {
-                "name": "Elixir Cloud",
-                "url": "https://elixir-cloud.dcc.sib.swiss/"
-            },
-            "contactUrl": "mailto:cloud-service@elixir-europe.org",
-            "documentationUrl": "https://ga4gh.github.io/task-execution-schemas/",
-            "version": "1.1.0",
-            "createdAt": "2023-01-01T00:00:00Z",
-            "updatedAt": datetime.now().isoformat() + "Z",
-            "environment": "production"
-        })
+            'error': str(e),
+            'error_code': 'SERVER_ERROR',
+            'error_type': 'server_error'
+        }), 500
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -438,17 +669,18 @@ def get_network_topology():
     """Get comprehensive network topology data"""
     try:
         import random
+        current_tes_locations = load_tes_location_data()
         
         # Calculate real-time metrics
-        active_instances = len([loc for loc in tes_locations if loc.get('status') == 'healthy'])
-        total_tasks = sum(loc.get('tasks', 0) for loc in tes_locations)
-        total_workflows = sum(loc.get('workflows', 0) for loc in tes_locations)
+        active_instances = len([loc for loc in current_tes_locations if loc.get('status') == 'healthy'])
+        total_tasks = sum(loc.get('tasks', 0) for loc in current_tes_locations)
+        total_workflows = sum(loc.get('workflows', 0) for loc in current_tes_locations)
         
         # Generate connection map
         connections = []
-        for i, instance in enumerate(tes_locations):
+        for i, instance in enumerate(current_tes_locations):
             # Simulate connections to other instances
-            for j, target in enumerate(tes_locations):
+            for j, target in enumerate(current_tes_locations):
                 if i != j:
                     connections.append({
                         'source': instance.get('id', f'instance-{i}'),
@@ -461,7 +693,7 @@ def get_network_topology():
         # Generate data flow patterns
         data_flows = []
         for workflow in workflow_runs[-5:]:  # Last 5 workflows
-            source_instance = next((loc for loc in tes_locations if loc.get('name') == workflow.get('tes_name')), None)
+            source_instance = next((loc for loc in current_tes_locations if loc.get('name') == workflow.get('tes_name')), None)
             if source_instance:
                 data_flows.append({
                     'workflow_id': workflow['run_id'],
@@ -474,26 +706,26 @@ def get_network_topology():
                 })
         
         topology_data = {
-            'instances': tes_locations,
+            'instances': current_tes_locations,
             'connections': connections,
             'data_flows': data_flows,
             'metrics': {
                 'active_instances': active_instances,
-                'total_instances': len(tes_locations),
+                'total_instances': len(current_tes_locations),
                 'total_tasks': total_tasks,
                 'total_workflows': total_workflows,
-                'network_health': 'healthy' if active_instances == len(tes_locations) else 'degraded',
-                'avg_latency': sum(loc.get('latency', 50) for loc in tes_locations) / len(tes_locations) if tes_locations else 0,
+                'network_health': 'healthy' if active_instances == len(current_tes_locations) else 'degraded',
+                'avg_latency': sum(loc.get('latency', 50) for loc in current_tes_locations) / len(current_tes_locations) if current_tes_locations else 0,
                 'last_updated': datetime.now().isoformat()
             },
             'geographic_coverage': {
-                'regions': list(set(loc.get('region', 'Unknown') for loc in tes_locations)),
-                'countries': list(set(loc.get('country', 'Unknown') for loc in tes_locations)),
+                'regions': list(set(loc.get('region', 'Unknown') for loc in current_tes_locations)),
+                'countries': list(set(loc.get('country', 'Unknown') for loc in current_tes_locations)),
                 'coordinates_bounds': {
-                    'north': max((loc.get('lat', 0) for loc in tes_locations), default=0),
-                    'south': min((loc.get('lat', 0) for loc in tes_locations), default=0),
-                    'east': max((loc.get('lng', 0) for loc in tes_locations), default=0),
-                    'west': min((loc.get('lng', 0) for loc in tes_locations), default=0)
+                    'north': max((loc.get('lat', 0) for loc in current_tes_locations), default=0),
+                    'south': min((loc.get('lat', 0) for loc in current_tes_locations), default=0),
+                    'east': max((loc.get('lng', 0) for loc in current_tes_locations), default=0),
+                    'west': min((loc.get('lng', 0) for loc in current_tes_locations), default=0)
                 }
             }
         }
@@ -509,10 +741,11 @@ def get_network_status():
     """Get real-time network status and health metrics"""
     try:
         import random
+        current_tes_locations = load_tes_location_data()
         
-        healthy_instances = [loc for loc in tes_locations if loc.get('status') == 'healthy']
-        processing_instances = [loc for loc in tes_locations if loc.get('status') == 'processing']
-        unhealthy_instances = [loc for loc in tes_locations if loc.get('status') not in ['healthy', 'processing']]
+        healthy_instances = [loc for loc in current_tes_locations if loc.get('status') == 'healthy']
+        processing_instances = [loc for loc in current_tes_locations if loc.get('status') == 'processing']
+        unhealthy_instances = [loc for loc in current_tes_locations if loc.get('status') not in ['healthy', 'processing']]
         
         return jsonify({
             'overall_status': 'healthy' if len(unhealthy_instances) == 0 else 'degraded',
@@ -520,21 +753,21 @@ def get_network_status():
                 'healthy': len(healthy_instances),
                 'processing': len(processing_instances),
                 'unhealthy': len(unhealthy_instances),
-                'total': len(tes_locations)
+                'total': len(current_tes_locations)
             },
             'performance': {
-                'avg_latency': sum(loc.get('latency', 50) for loc in tes_locations) / len(tes_locations) if tes_locations else 0,
-                'min_latency': min((loc.get('latency', 50) for loc in tes_locations), default=0),
-                'max_latency': max((loc.get('latency', 50) for loc in tes_locations), default=0),
+                'avg_latency': sum(loc.get('latency', 50) for loc in current_tes_locations) / len(current_tes_locations) if current_tes_locations else 0,
+                'min_latency': min((loc.get('latency', 50) for loc in current_tes_locations), default=0),
+                'max_latency': max((loc.get('latency', 50) for loc in current_tes_locations), default=0),
                 'total_capacity': {
-                    'cpu': sum(loc.get('capacity', {}).get('cpu', 0) for loc in tes_locations),
-                    'memory': f"{sum(float(str(loc.get('capacity', {}).get('memory', '0TB')).replace('TB', '')) for loc in tes_locations):.1f}TB",
-                    'storage': f"{sum(float(str(loc.get('capacity', {}).get('storage', '0TB')).replace('TB', '')) for loc in tes_locations):.1f}TB"
+                    'cpu': sum(loc.get('capacity', {}).get('cpu', 0) for loc in current_tes_locations),
+                    'memory': f"{sum(float(str(loc.get('capacity', {}).get('memory', '0TB')).replace('TB', '')) for loc in current_tes_locations):.1f}TB",
+                    'storage': f"{sum(float(str(loc.get('capacity', {}).get('storage', '0TB')).replace('TB', '')) for loc in current_tes_locations):.1f}TB"
                 }
             },
             'activity': {
-                'active_tasks': sum(loc.get('tasks', 0) for loc in tes_locations),
-                'active_workflows': sum(loc.get('workflows', 0) for loc in tes_locations),
+                'active_tasks': sum(loc.get('tasks', 0) for loc in current_tes_locations),
+                'active_workflows': sum(loc.get('workflows', 0) for loc in current_tes_locations),
                 'data_transfers': random.randint(5, 15),
                 'network_utilization': f"{random.randint(15, 85)}%"
             },
@@ -550,8 +783,8 @@ def get_instance_metrics(instance_id):
     """Get detailed metrics for a specific TES instance"""
     try:
         import random
-        
-        instance = next((loc for loc in tes_locations if loc.get('id') == instance_id), None)
+        current_tes_locations = load_tes_location_data()
+        instance = next((loc for loc in current_tes_locations if loc.get('id') == instance_id), None)
         if not instance:
             return jsonify({'error': 'Instance not found'}), 404
         
@@ -581,7 +814,7 @@ def get_instance_metrics(instance_id):
             },
             'connections': {
                 'active_connections': random.randint(3, 8),
-                'peer_instances': [loc.get('id', '') for loc in tes_locations if loc.get('id') != instance_id][:3]
+                'peer_instances': [loc.get('id', '') for loc in current_tes_locations if loc.get('id') != instance_id][:3]
             }
         }
         
@@ -593,28 +826,49 @@ def get_instance_metrics(instance_id):
 
 @app.route('/api/dashboard_data', methods=['GET'])
 def get_dashboard_data():
-    """Get all dashboard data in one request including fresh instance data"""
     from datetime import datetime, timezone
-    
-    # Get fresh TES instances data (same as /api/healthy-instances)
+
+    current_tes_locations = load_tes_location_data()
+
     fresh_instances = []
-    for tes_instance in TES_INSTANCES:
+    for tes_instance in current_tes_locations:
         fresh_instances.append({
-            "name": tes_instance["name"],
-            "url": tes_instance["url"],
+            "name": tes_instance.get("name"),
+            "url": tes_instance.get("url"),
             "status": "healthy",
             "last_checked": datetime.now(timezone.utc).isoformat()
         })
-    
-    return jsonify({
+
+    # Define the data dictionary BEFORE using it
+    data = {
         'tasks': submitted_tasks,
         'workflow_runs': workflow_runs,
         'batch_runs': batch_runs,
-        'tes_instances': TES_INSTANCES,  # Keep original format for compatibility
-        'healthy_instances': fresh_instances,  # Add fresh instances data
-        'instances_count': len(TES_INSTANCES),  # Add explicit count
-        'tes_locations': tes_locations
-    })
+        'tes_instances': current_tes_locations,
+        'healthy_instances': fresh_instances,
+        'instances_count': len(current_tes_locations),
+        'tes_locations': current_tes_locations
+    }
+
+    # Check for serialization issues and handle them
+    import json
+    serializable_data = {}
+    for k, v in data.items():
+        try:
+            json.dumps(v)
+            serializable_data[k] = v
+        except Exception as e:
+            print(f"Key '{k}' is not serializable: {e}")
+            # For non-serializable data, try to convert to a serializable format
+            if k == 'tes_locations' and isinstance(v, list):
+                # Convert tes_locations to a serializable format
+                serializable_data[k] = [loc if isinstance(loc, (dict, list, str, int, float, bool, type(None))) else str(loc) for loc in v]
+            else:
+                # Skip non-serializable keys or convert to string
+                serializable_data[k] = str(v) if v else None
+
+    # Return the actual data
+    return jsonify(serializable_data)
 
 @app.route('/api/latest_workflow_status', methods=['GET'])
 def latest_workflow_status():
@@ -710,12 +964,84 @@ def submit_task():
         
         import requests
         
-        # Test network connectivity first
+        # Test network connectivity first and categorize errors
+        connectivity_error_info = None
         try:
             test_response = requests.get(f"{tes_url.rstrip('/')}/ga4gh/tes/v1/service-info", timeout=10)
             print(f"🔍 TES connectivity test: {test_response.status_code}")
+            if test_response.status_code != 200:
+                connectivity_error_info = {
+                    'error_type': 'service_unavailable',
+                    'error_code': 'SERVICE_ERROR',
+                    'message': f'TES instance service-info returned status {test_response.status_code}',
+                    'status_code': test_response.status_code,
+                    'reason': 'The TES instance is responding but not functioning correctly'
+                }
+        except requests.exceptions.Timeout:
+            connectivity_error_info = {
+                'error_type': 'timeout',
+                'error_code': 'TIMEOUT',
+                'message': 'Connection timeout - TES instance did not respond within 10 seconds',
+                'reason': 'The TES instance may be overloaded, offline, or unreachable'
+            }
+        except requests.exceptions.ConnectionError as conn_err:
+            error_str = str(conn_err).lower()
+            if 'name resolution' in error_str or 'nodename' in error_str or 'servname' in error_str:
+                connectivity_error_info = {
+                    'error_type': 'dns_error',
+                    'error_code': 'DNS_ERROR',
+                    'message': 'DNS resolution failed - Cannot resolve TES instance hostname',
+                    'reason': f'The hostname "{tes_url}" cannot be resolved. Check if the URL is correct.'
+                }
+            elif 'connection refused' in error_str or 'refused' in error_str:
+                connectivity_error_info = {
+                    'error_type': 'connection_refused',
+                    'error_code': 'CONNECTION_REFUSED',
+                    'message': 'Connection refused - TES instance is not accepting connections',
+                    'reason': 'The TES instance may be offline, the port may be blocked, or the service may not be running'
+                }
+            elif 'ssl' in error_str or 'certificate' in error_str:
+                connectivity_error_info = {
+                    'error_type': 'ssl_error',
+                    'error_code': 'SSL_ERROR',
+                    'message': 'SSL/TLS certificate error',
+                    'reason': 'There is a problem with the SSL certificate. The connection may be insecure or the certificate is invalid.'
+                }
+            else:
+                connectivity_error_info = {
+                    'error_type': 'connection_error',
+                    'error_code': 'CONNECTION_ERROR',
+                    'message': f'Connection error - Cannot reach TES instance: {str(conn_err)}',
+                    'reason': 'Network connectivity issue. Check if the TES instance is accessible.'
+                }
+        except requests.exceptions.SSLError as ssl_err:
+            connectivity_error_info = {
+                'error_type': 'ssl_error',
+                'error_code': 'SSL_ERROR',
+                'message': 'SSL/TLS certificate verification failed',
+                'reason': f'SSL error: {str(ssl_err)}'
+            }
         except Exception as connectivity_error:
+            connectivity_error_info = {
+                'error_type': 'unknown_error',
+                'error_code': 'UNKNOWN_ERROR',
+                'message': f'Connectivity test failed: {str(connectivity_error)}',
+                'reason': 'An unexpected error occurred while testing connectivity'
+            }
             print(f"⚠️ TES connectivity test failed: {connectivity_error}")
+        
+        # If connectivity test failed, return detailed error
+        if connectivity_error_info:
+            return jsonify({
+                'success': False,
+                'error': connectivity_error_info['message'],
+                'error_type': connectivity_error_info['error_type'],
+                'error_code': connectivity_error_info['error_code'],
+                'reason': connectivity_error_info['reason'],
+                'tes_endpoint': tes_endpoint,
+                'tes_url': tes_url,
+                'tes_name': tes_name
+            }), 503
         
         response = requests.post(
             tes_endpoint,
@@ -745,6 +1071,7 @@ def submit_task():
                 'id': task_id,
                 'task_id': task_id,  # Keep for backwards compatibility
                 'name': tes_task['name'],
+                'task_name': tes_task['name'],  # Keep for backwards compatibility
                 'description': tes_task['description'],
                 'state': 'QUEUED',
                 'status': 'QUEUED',  # Keep for backwards compatibility
@@ -826,43 +1153,137 @@ def submit_task():
                 'task_name': tes_task['name']
             })
         else:
+            # Handle different HTTP error status codes
+            error_type_map = {
+                400: {'error_type': 'bad_request', 'error_code': 'BAD_REQUEST', 'reason': 'The task specification is invalid or malformed'},
+                401: {'error_type': 'unauthorized', 'error_code': 'UNAUTHORIZED', 'reason': 'Authentication required or credentials are invalid'},
+                403: {'error_type': 'forbidden', 'error_code': 'FORBIDDEN', 'reason': 'You do not have permission to submit tasks to this instance'},
+                404: {'error_type': 'not_found', 'error_code': 'NOT_FOUND', 'reason': 'The TES endpoint was not found. Check if the URL is correct.'},
+                408: {'error_type': 'timeout', 'error_code': 'TIMEOUT', 'reason': 'The request timed out. The TES instance may be overloaded.'},
+                429: {'error_type': 'rate_limit', 'error_code': 'RATE_LIMITED', 'reason': 'Too many requests. Please wait before submitting again.'},
+                500: {'error_type': 'server_error', 'error_code': 'SERVER_ERROR', 'reason': 'The TES instance encountered an internal error'},
+                502: {'error_type': 'bad_gateway', 'error_code': 'BAD_GATEWAY', 'reason': 'The TES instance gateway is not responding correctly'},
+                503: {'error_type': 'service_unavailable', 'error_code': 'SERVICE_UNAVAILABLE', 'reason': 'The TES instance service is temporarily unavailable'},
+                504: {'error_type': 'gateway_timeout', 'error_code': 'GATEWAY_TIMEOUT', 'reason': 'The TES instance gateway timed out'}
+            }
+            
+            error_info = error_type_map.get(response.status_code, {
+                'error_type': 'http_error',
+                'error_code': 'HTTP_ERROR',
+                'reason': f'HTTP {response.status_code} error from TES instance'
+            })
+            
             error_msg = f'TES submission failed with status {response.status_code}'
             try:
                 error_data = response.json()
-                error_msg = f'{error_msg}: {error_data.get("message", error_data)}'
+                if error_data.get('message'):
+                    error_msg = error_data.get('message')
+                elif error_data.get('error'):
+                    error_msg = error_data.get('error')
+                else:
+                    error_msg = f'{error_msg}: {str(error_data)}'
             except:
-                error_msg = f'{error_msg}: {response.text}'
+                response_text = response.text[:200] if response.text else 'No error details provided'
+                error_msg = f'{error_msg}: {response_text}'
             
             return jsonify({
                 'success': False,
                 'error': error_msg,
+                'error_type': error_info['error_type'],
+                'error_code': error_info['error_code'],
+                'reason': error_info['reason'],
                 'tes_endpoint': tes_endpoint,
+                'tes_url': tes_url,
+                'tes_name': tes_name,
                 'status_code': response.status_code
             }), 400
     
     except Exception as e:
         import requests as req_module
+        error_info = None
+        
         if isinstance(e, req_module.exceptions.Timeout):
-            return jsonify({
-                'success': False,
-                'error': 'Request timeout - TES instance may be unavailable'
-            }), 408
+            error_info = {
+                'error_type': 'timeout',
+                'error_code': 'TIMEOUT',
+                'message': 'Request timeout - TES instance did not respond within 30 seconds',
+                'reason': 'The TES instance may be overloaded, processing slowly, or unreachable. Try again later.',
+                'http_status': 408
+            }
         elif isinstance(e, req_module.exceptions.ConnectionError):
-            error_msg = f'Connection error - TES instance may be offline: {str(e)}'
-            print(f"❌ Connection Error: {error_msg}")
+            error_str = str(e).lower()
+            if 'name resolution' in error_str or 'nodename' in error_str or 'servname' in error_str:
+                error_info = {
+                    'error_type': 'dns_error',
+                    'error_code': 'DNS_ERROR',
+                    'message': 'DNS resolution failed - Cannot resolve TES instance hostname',
+                    'reason': f'The hostname in "{tes_url}" cannot be resolved. Verify the URL is correct.',
+                    'http_status': 503
+                }
+            elif 'connection refused' in error_str or 'refused' in error_str:
+                error_info = {
+                    'error_type': 'connection_refused',
+                    'error_code': 'CONNECTION_REFUSED',
+                    'message': 'Connection refused - TES instance is not accepting connections',
+                    'reason': 'The TES instance may be offline, the port may be blocked, or the service may not be running on that port.',
+                    'http_status': 503
+                }
+            elif 'ssl' in error_str or 'certificate' in error_str:
+                error_info = {
+                    'error_type': 'ssl_error',
+                    'error_code': 'SSL_ERROR',
+                    'message': 'SSL/TLS certificate error',
+                    'reason': 'There is a problem with the SSL certificate. The connection may be insecure or the certificate is invalid.',
+                    'http_status': 503
+                }
+            else:
+                error_info = {
+                    'error_type': 'connection_error',
+                    'error_code': 'CONNECTION_ERROR',
+                    'message': f'Connection error - Cannot reach TES instance',
+                    'reason': f'Network connectivity issue: {str(e)}. Check if the TES instance is accessible.',
+                    'http_status': 503
+                }
+        elif isinstance(e, req_module.exceptions.SSLError):
+            error_info = {
+                'error_type': 'ssl_error',
+                'error_code': 'SSL_ERROR',
+                'message': 'SSL/TLS certificate verification failed',
+                'reason': f'SSL error: {str(e)}',
+                'http_status': 503
+            }
+        else:
+            # Other exceptions
+            error_info = {
+                'error_type': 'unknown_error',
+                'error_code': 'UNKNOWN_ERROR',
+                'message': f'Task submission failed: {str(e)}',
+                'reason': 'An unexpected error occurred. Please check the server logs for more details.',
+                'http_status': 500
+            }
+        
+        if error_info:
+            print(f"❌ Task submission error ({error_info['error_code']}): {error_info['message']}")
             print(f"🌐 Attempted TES endpoint: {tes_endpoint}")
             return jsonify({
                 'success': False,
-                'error': error_msg,
-                'tes_endpoint': tes_endpoint
-            }), 503
-        else:
-            # Re-raise if it's not a requests-related exception
-            print(f"❌ Task submission error: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': f'Task submission failed: {str(e)}'
-            }), 500
+                'error': error_info['message'],
+                'error_type': error_info['error_type'],
+                'error_code': error_info['error_code'],
+                'reason': error_info['reason'],
+                'tes_endpoint': tes_endpoint,
+                'tes_url': tes_url,
+                'tes_name': tes_name
+            }), error_info['http_status']
+        
+        # Fallback (should not reach here)
+        print(f"❌ Task submission error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Task submission failed: {str(e)}',
+            'error_type': 'unknown_error',
+            'error_code': 'UNKNOWN_ERROR'
+        }), 500
 
 @app.route('/api/submit_workflow', methods=['POST'])
 def submit_workflow():
@@ -1463,6 +1884,29 @@ Submitted: {batch['submitted_at']}
     
     return jsonify({'success': True, 'log': log_content, 'batch': batch})
 
+
+@app.route('/api/task_log')
+def task_log():
+    tes_url = request.args.get('tesUrl')
+    task_id = request.args.get('taskId')
+    if not tes_url or not task_id:
+        return jsonify({'error': 'Missing parameters'}), 400
+    try:
+        resp = requests.get(f"{tes_url}/ga4gh/tes/v1/tasks/{task_id}?view=FULL", timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            logs = []
+            for executor in data.get('executors', []):
+                for log in executor.get('logs', []):
+                    logs.append(log.get('stdout', ''))
+                    logs.append(log.get('stderr', ''))
+            return jsonify({'logs': logs})
+        else:
+            return jsonify({'error': f"TES responded with {resp.status_code}"}), 502
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+    
 @app.route('/api/task_log/<path:task_id>', methods=['GET'])
 def get_task_log(task_id):
     """Get individual task execution log with real details from TES instance"""
@@ -2770,7 +3214,7 @@ class {middleware_name.replace(' ', '')}Middleware(BaseMiddleware):
 
 if __name__ == '__main__':
     # Determine port based on environment
-    port = int(os.getenv('PORT', '5001'))  # Default to 5001 for local dev, uses env PORT for production
+    port = int(os.getenv('PORT', '8000'))  # Default to 8000 for local dev, uses env PORT for production
     debug_mode = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
     
     # Using hardcoded instances - no health checking needed!

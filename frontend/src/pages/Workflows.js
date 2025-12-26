@@ -16,7 +16,7 @@ const WorkflowsContainer = styled.div`
             <option value="">Select Healthy TES Instance</option>
             {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ✅ ({instance.url})
+                {instance.name} ({instance.url})
               </option>
             ))}
           </Select>max-width: 1400px;
@@ -571,7 +571,7 @@ const Workflows = () => {
             <option value="">Select Healthy TES Instance</option>
             {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ✅ ({instance.url})
+                {instance.name} ({instance.url})
               </option>
             ))}
           </Select>
@@ -638,7 +638,7 @@ const Workflows = () => {
             <option value="">Select Healthy TES Instance</option>
             {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ✅ ({instance.url})
+                {instance.name} ({instance.url})
               </option>
             ))}
           </Select>
@@ -713,7 +713,7 @@ const Workflows = () => {
             <option value="">Select Healthy TES Instance</option>
             {instances.map((instance, idx) => (
               <option key={idx} value={instance.url}>
-                {instance.name} ✅ ({instance.url})
+                {instance.name} ({instance.url})
               </option>
             ))}
           </Select>

@@ -5,12 +5,10 @@ export const serviceStatusService = {
   // Get status of all TES services and proTES nodes
   getServiceStatus: async () => {
     try {
-      console.log('🔍 ServiceStatusService: Fetching service status');
       const response = await api.get('/api/service-status');
-      console.log('✅ ServiceStatusService: Service status received:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ ServiceStatusService: Error fetching service status:', error);
+      console.error('ServiceStatusService: Error fetching service status:', error.message);
       throw error;
     }
   },

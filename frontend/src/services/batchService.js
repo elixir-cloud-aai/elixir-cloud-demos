@@ -123,9 +123,33 @@ export const batchService = {
   getBatchRuns: async () => {
     try {
       const response = await api.get('/api/batch_runs');
-      return response.data;
+      const batchRuns = response.data || [];
+      
+      // Filter out batch runs from unhealthy or error-prone instances
+      const healthyBatchRuns = batchRuns.filter(run => {
+        return run && 
+               run.run_id && 
+               run.tes_url &&
+               run.status &&
+               // Filter out error states that indicate problematic instances
+               !run.connection_error &&
+               !run.timeout_error &&
+               run.status !== 'CONNECTION_ERROR' &&
+               run.status !== 'TIMEOUT_ERROR' &&
+               run.status !== 'SYSTEM_ERROR';
+      });
+      
+      console.log(`BatchService: Filtered ${healthyBatchRuns.length} healthy batch runs out of ${batchRuns.length} total`);
+      return healthyBatchRuns;
     } catch (error) {
       console.error('Error fetching batch runs:', error);
+      
+      // Handle timeout and connectivity errors gracefully
+      if (error.response?.status === 504 || error.response?.status === 503) {
+        console.warn('External services timeout/unavailable, returning empty batch runs');
+        return [];
+      }
+      
       throw error;
     }
   }

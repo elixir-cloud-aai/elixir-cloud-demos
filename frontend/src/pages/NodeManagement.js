@@ -14,7 +14,7 @@ import {
   Save,
   X
 } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatDate } from '../utils/formatters';
@@ -357,7 +357,7 @@ const NodeManagement = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get('http://localhost:8000/api/nodes');
+      const response = await api.get('/api/nodes');
       setNodes(response.data.nodes || []);
     } catch (err) {
       setError('Failed to load nodes: ' + err.message);
@@ -428,10 +428,10 @@ const NodeManagement = () => {
       };
 
       if (isEdit) {
-        await axios.put(`http://localhost:8000/api/nodes/${editingNode.id}`, payload);
+        await api.put(`/api/nodes/${editingNode.id}`, payload);
         setShowEditModal(false);
       } else {
-        await axios.post('http://localhost:8000/api/nodes', payload);
+        await api.post('/api/nodes', payload);
         setShowAddModal(false);
       }
       
@@ -445,7 +445,7 @@ const NodeManagement = () => {
   const handleDeleteNode = async (nodeId) => {
     if (window.confirm('Are you sure you want to remove this node? This action cannot be undone.')) {
       try {
-        await axios.delete(`http://localhost:8000/api/nodes/${nodeId}`);
+        await api.delete(`/api/nodes/${nodeId}`);
         fetchNodes();
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to delete node');
@@ -456,7 +456,7 @@ const NodeManagement = () => {
   const handleTestNode = async (nodeId) => {
     try {
       setTestingNodes(prev => new Set([...prev, nodeId]));
-      const response = await axios.post(`http://localhost:8000/api/nodes/${nodeId}/test`);
+      const response = await api.post(`/api/nodes/${nodeId}/test`);
       setTestResults(prev => ({ ...prev, [nodeId]: response.data }));
     } catch (err) {
       setError('Failed to test node connectivity: ' + err.message);

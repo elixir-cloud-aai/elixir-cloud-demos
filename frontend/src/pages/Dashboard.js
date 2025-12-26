@@ -215,7 +215,9 @@ const Dashboard = () => {
   React.useEffect(() => {
     const fetchDirectDashboardData = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/dashboard_data');
+        const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/dashboard_data` : '/api/dashboard_data';
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setDirectDashboardData(data);

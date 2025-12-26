@@ -298,6 +298,7 @@ const Logs = () => {
         // Load all recent logs (existing behavior)
         const dashboardData = await taskService.getDashboardData();
 
+        
         console.log('Dashboard data for logs:', dashboardData);
         console.log('Submitted tasks found:', dashboardData.submitted_tasks?.length || 0);
 

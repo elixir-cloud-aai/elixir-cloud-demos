@@ -1,6 +1,10 @@
-import axios from 'axios';
+import api from './api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+// Use the api service which handles base URL automatically
+const getApiUrl = (endpoint) => {
+  const baseUrl = process.env.REACT_APP_API_URL || '';
+  return baseUrl ? `${baseUrl}${endpoint}` : endpoint;
+};
 
 class InstanceService {
   constructor() {
@@ -64,7 +68,7 @@ class InstanceService {
         console.log('🔄 Refreshing cached healthy TES instances...');
       }
       
-      const response = await axios.get(`${API_BASE_URL}/healthy-instances`, {
+      const response = await api.get(getApiUrl('/api/healthy-instances'), {
         timeout: 5000 // Fast 5 second timeout since backend returns cached data
       });
 
