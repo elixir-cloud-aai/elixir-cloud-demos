@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import api, { testConnection } from '../services/api';
@@ -417,13 +417,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleRefresh = () => {
-    refetchDashboard();
-    refetchTasks();
-    fetchApiHealth();
-  };
-
-  const fetchApiHealth = async () => {
+  const fetchApiHealth = useCallback(async () => {
     try {
       setApiHealth(prev => ({ ...prev, loading: true }));
       const response = await api.get('/api/service_status');
@@ -461,13 +455,19 @@ const Dashboard = () => {
         status: 'error'
       }));
     }
-  };
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    refetchDashboard();
+    refetchTasks();
+    fetchApiHealth();
+  }, [refetchDashboard, refetchTasks, fetchApiHealth]);
 
   useEffect(() => {
     fetchApiHealth();
     const interval = setInterval(fetchApiHealth, 60000); // Refresh every minute
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchApiHealth]);
 
 
 
