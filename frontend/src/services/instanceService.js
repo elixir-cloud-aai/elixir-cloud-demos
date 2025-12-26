@@ -1,11 +1,5 @@
 import api from './api';
 
-// Use the api service which handles base URL automatically
-const getApiUrl = (endpoint) => {
-  const baseUrl = process.env.REACT_APP_API_URL || '';
-  return baseUrl ? `${baseUrl}${endpoint}` : endpoint;
-};
-
 class InstanceService {
   constructor() {
     this.healthyInstances = [];
@@ -68,7 +62,7 @@ class InstanceService {
         console.log('🔄 Refreshing cached healthy TES instances...');
       }
       
-      const response = await api.get(getApiUrl('/api/healthy-instances'), {
+      const response = await api.get('/api/healthy-instances', {
         timeout: 5000 // Fast 5 second timeout since backend returns cached data
       });
 
