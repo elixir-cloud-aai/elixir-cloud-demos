@@ -2527,7 +2527,7 @@ def service_status():
         location_map = {}
         if tes_locations_file.exists():
             try:
-            with open(tes_locations_file, 'r') as f:
+                with open(tes_locations_file, 'r') as f:
                     location_data = json.load(f)
                     if isinstance(location_data, list):
                         for loc in location_data:
@@ -2542,7 +2542,7 @@ def service_status():
             # Handle dict format from TES_INSTANCES (from .tes_instances file)
             if isinstance(instance, dict):
                 name = instance.get('name', 'Unknown')
-            url = instance.get('url', '')
+                url = instance.get('url', '')
             else:
                 # Fallback for other formats
                 name = str(instance.get('name', instance.get('id', 'Unknown')))
