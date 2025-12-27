@@ -84,7 +84,7 @@ const ApiTest = () => {
       if (tesInstances.length > 0) {
         const testUrl = tesInstances[0].url;
         const info = await serviceInfoService.getServiceInfo(testUrl);
-        addResult('serviceInfo', true, 'Service info loaded successfully');
+      addResult('serviceInfo', true, 'Service info loaded successfully');
       } else {
         addResult('serviceInfo', false, 'No TES instances available to test');
       }

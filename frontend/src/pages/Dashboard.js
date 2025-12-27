@@ -421,11 +421,11 @@ const Dashboard = () => {
     try {
       setApiHealth(prev => ({ ...prev, loading: true }));
       const response = await api.get('/api/service_status');
-      const data = response.data;
+      const data = response?.data || {};
       
-      const services = data.services || [];
-      const healthy = services.filter(s => s.status === 'online' && s.health === 'healthy').length;
-      const unhealthy = services.filter(s => s.status === 'offline' || s.health === 'unhealthy').length;
+      const services = Array.isArray(data.services) ? data.services : [];
+      const healthy = services.filter(s => s?.status === 'online' && s?.health === 'healthy').length;
+      const unhealthy = services.filter(s => s?.status === 'offline' || s?.health === 'unhealthy').length;
       const total = services.length;
       const percentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
       
@@ -440,28 +440,31 @@ const Dashboard = () => {
       
       setApiHealth({
         loading: false,
-        healthy,
-        unhealthy,
-        total,
-        percentage,
+        healthy: healthy || 0,
+        unhealthy: unhealthy || 0,
+        total: total || 0,
+        percentage: percentage || 0,
         status,
-        services
+        services: services || []
       });
     } catch (error) {
       console.error('Error fetching API health:', error);
       setApiHealth(prev => ({
         ...prev,
         loading: false,
-        status: 'error'
+        status: 'error',
+        healthy: prev.healthy || 0,
+        unhealthy: prev.unhealthy || 0,
+        total: prev.total || 0,
+        percentage: prev.percentage || 0
       }));
     }
   }, []);
 
   const handleRefresh = useCallback(() => {
     refetchDashboard();
-    refetchTasks();
     fetchApiHealth();
-  }, [refetchDashboard, refetchTasks, fetchApiHealth]);
+  }, [refetchDashboard, fetchApiHealth]);
 
   useEffect(() => {
     fetchApiHealth();
@@ -497,68 +500,82 @@ const Dashboard = () => {
   };
 
   const renderDonutChart = () => {
-    const size = 120;
-    const strokeWidth = 12;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const healthyPercentage = apiHealth.total > 0 ? (apiHealth.healthy / apiHealth.total) : 0;
-    const unhealthyPercentage = apiHealth.total > 0 ? (apiHealth.unhealthy / apiHealth.total) : 0;
-    
-    // Calculate segment lengths
-    const healthyLength = healthyPercentage * circumference;
-    const unhealthyLength = unhealthyPercentage * circumference;
-    
-    return (
-      <ChartContainer>
-        <div style={{ position: 'relative', width: size, height: size }}>
-          <DonutChart width={size} height={size}>
-            {/* Background circle */}
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke="#e9ecef"
-              strokeWidth={strokeWidth}
-            />
-            {/* Healthy segment */}
-            {apiHealth.healthy > 0 && (
+    try {
+      const size = 120;
+      const strokeWidth = 12;
+      const radius = (size - strokeWidth) / 2;
+      const circumference = 2 * Math.PI * radius;
+      const total = apiHealth?.total || 0;
+      const healthy = apiHealth?.healthy || 0;
+      const unhealthy = apiHealth?.unhealthy || 0;
+      const healthyPercentage = total > 0 ? (healthy / total) : 0;
+      const unhealthyPercentage = total > 0 ? (unhealthy / total) : 0;
+      
+      // Calculate segment lengths
+      const healthyLength = Math.max(0, healthyPercentage * circumference);
+      const unhealthyLength = Math.max(0, unhealthyPercentage * circumference);
+      
+      return (
+        <ChartContainer>
+          <div style={{ position: 'relative', width: size, height: size }}>
+            <DonutChart width={size} height={size}>
+              {/* Background circle */}
               <circle
                 cx={size / 2}
                 cy={size / 2}
                 r={radius}
                 fill="none"
-                stroke="#28a745"
+                stroke="#e9ecef"
                 strokeWidth={strokeWidth}
-                strokeDasharray={`${healthyLength} ${circumference}`}
-                strokeDashoffset={0}
-                strokeLinecap="round"
               />
-            )}
-            {/* Unhealthy segment - starts after healthy segment */}
-            {apiHealth.unhealthy > 0 && (
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke="#dc3545"
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${unhealthyLength} ${circumference}`}
-                strokeDashoffset={-healthyLength}
-                strokeLinecap="round"
-              />
-            )}
-          </DonutChart>
-          <ChartLabel>
-            <ChartPercentage color={getHealthColor(apiHealth.status)}>
-              {apiHealth.percentage}%
-            </ChartPercentage>
-            <ChartText>Healthy</ChartText>
-          </ChartLabel>
-        </div>
-      </ChartContainer>
-    );
+              {/* Healthy segment */}
+              {healthy > 0 && healthyLength > 0 && (
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke="#28a745"
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${healthyLength} ${circumference}`}
+                  strokeDashoffset={0}
+                  strokeLinecap="round"
+                />
+              )}
+              {/* Unhealthy segment - starts after healthy segment */}
+              {unhealthy > 0 && unhealthyLength > 0 && (
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke="#dc3545"
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${unhealthyLength} ${circumference}`}
+                  strokeDashoffset={-healthyLength}
+                  strokeLinecap="round"
+                />
+              )}
+            </DonutChart>
+            <ChartLabel>
+              <ChartPercentage color={getHealthColor(apiHealth?.status || 'unknown')}>
+                {apiHealth?.percentage || 0}%
+              </ChartPercentage>
+              <ChartText>Healthy</ChartText>
+            </ChartLabel>
+          </div>
+        </ChartContainer>
+      );
+    } catch (error) {
+      console.error('Error rendering donut chart:', error);
+      return (
+        <ChartContainer>
+          <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+            Chart unavailable
+          </div>
+        </ChartContainer>
+      );
+    }
   };
 
   return (
@@ -574,12 +591,12 @@ const Dashboard = () => {
             {apiHealth.loading ? (
               <LoadingSpinner size="small" />
             ) : (
-              <HealthStatusBadge status={apiHealth.status}>
-                {apiHealth.status === 'healthy' && <CheckCircle size={16} />}
-                {apiHealth.status === 'warning' && <AlertTriangle size={16} />}
-                {apiHealth.status === 'error' && <XCircle size={16} />}
-                {apiHealth.status === 'healthy' ? 'All Systems Operational' : 
-                 apiHealth.status === 'warning' ? 'Degraded Performance' : 
+              <HealthStatusBadge status={apiHealth?.status || 'unknown'}>
+                {apiHealth?.status === 'healthy' && <CheckCircle size={16} />}
+                {apiHealth?.status === 'warning' && <AlertTriangle size={16} />}
+                {apiHealth?.status === 'error' && <XCircle size={16} />}
+                {apiHealth?.status === 'healthy' ? 'All Systems Operational' : 
+                 apiHealth?.status === 'warning' ? 'Degraded Performance' : 
                  'Service Issues Detected'}
               </HealthStatusBadge>
             )}
@@ -590,7 +607,7 @@ const Dashboard = () => {
           </div>
         </HealthHeader>
         
-        {!apiHealth.loading && (
+        {!apiHealth.loading && apiHealth.total !== undefined && (
           <HealthContent>
             {renderDonutChart()}
             <HealthStats>
@@ -600,7 +617,7 @@ const Dashboard = () => {
                   Healthy Services
                 </HealthStatLabel>
                 <HealthStatValue color="#28a745">
-                  {apiHealth.healthy} / {apiHealth.total}
+                  {apiHealth?.healthy || 0} / {apiHealth?.total || 0}
                 </HealthStatValue>
               </HealthStatRow>
               
@@ -610,7 +627,7 @@ const Dashboard = () => {
                   Unhealthy Services
                 </HealthStatLabel>
                 <HealthStatValue color="#dc3545">
-                  {apiHealth.unhealthy} / {apiHealth.total}
+                  {apiHealth?.unhealthy || 0} / {apiHealth?.total || 0}
                 </HealthStatValue>
               </HealthStatRow>
               
@@ -620,27 +637,27 @@ const Dashboard = () => {
                   Total Services
                 </HealthStatLabel>
                 <HealthStatValue color="#17a2b8">
-                  {apiHealth.total}
+                  {apiHealth?.total || 0}
                 </HealthStatValue>
               </HealthStatRow>
               
-              <HealthSummary status={apiHealth.status}>
-                {apiHealth.status === 'healthy' && (
+              <HealthSummary status={apiHealth?.status || 'unknown'}>
+                {apiHealth?.status === 'healthy' && (
                   <>
                     <strong>✓ All systems operational</strong><br />
-                    {apiHealth.healthy} out of {apiHealth.total} TES instances are healthy and responding.
+                    {apiHealth?.healthy || 0} out of {apiHealth?.total || 0} TES instances are healthy and responding.
                   </>
                 )}
-                {apiHealth.status === 'warning' && (
+                {apiHealth?.status === 'warning' && (
                   <>
                     <strong>⚠ Degraded performance</strong><br />
-                    {apiHealth.unhealthy} instance(s) are experiencing issues. Some services may be unavailable.
+                    {apiHealth?.unhealthy || 0} instance(s) are experiencing issues. Some services may be unavailable.
                   </>
                 )}
-                {apiHealth.status === 'error' && (
+                {apiHealth?.status === 'error' && (
                   <>
                     <strong>✗ Service issues detected</strong><br />
-                    {apiHealth.unhealthy} out of {apiHealth.total} instances are unhealthy. Please check the service status page for details.
+                    {apiHealth?.unhealthy || 0} out of {apiHealth?.total || 0} instances are unhealthy. Please check the service status page for details.
                   </>
                 )}
               </HealthSummary>

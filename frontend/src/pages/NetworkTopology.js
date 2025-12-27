@@ -804,7 +804,7 @@ const NetworkTopology = () => {
 
       const locations = Array.isArray(locationsResponse.data) ? locationsResponse.data : [];
       const dashboardData = dashboardResponse.data || {};
-
+      
       // Use backend-provided TES instance data directly and normalise fields
       const enhancedInstances = locations.map((loc, idx) => ({
         id: loc.id || `instance-${idx}`,
@@ -826,8 +826,8 @@ const NetworkTopology = () => {
         uptime: loc.uptime || 'N/A',
       }));
 
-      setInstances(enhancedInstances);
-
+setInstances(enhancedInstances);
+      
       // Process workflow paths from real dashboard data (no random simulation)
       const batchRuns = Array.isArray(dashboardData.batch_runs) ? dashboardData.batch_runs : [];
       const workflowRuns = Array.isArray(dashboardData.workflow_runs) ? dashboardData.workflow_runs : [];
@@ -851,7 +851,7 @@ const NetworkTopology = () => {
           submitted_at: run.submitted_at,
         }))
       ];
-
+      
       setWorkflowPaths(allWorkflows);
 
       // Real-time stats derived only from live data
@@ -890,11 +890,11 @@ const NetworkTopology = () => {
   useEffect(() => {
     if (!realTimePolling) return;
 
-    const interval = setInterval(() => {
-      loadNetworkTopology();
-    }, 15000); // 15 seconds
+      const interval = setInterval(() => {
+        loadNetworkTopology();
+      }, 15000); // 15 seconds
 
-    return () => clearInterval(interval);
+      return () => clearInterval(interval);
   }, [realTimePolling, loadNetworkTopology]);
 
   // Generate simulated data transfers
