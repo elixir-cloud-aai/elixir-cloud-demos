@@ -149,8 +149,8 @@ def load_tes_location_data():
     # Load location data from JSON if available
     location_map = {}
     try:
-if TES_LOCATIONS_FILE.exists():
-    with open(TES_LOCATIONS_FILE) as f:
+        if TES_LOCATIONS_FILE.exists():
+            with open(TES_LOCATIONS_FILE) as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     for loc in data:
