@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import api, { testConnection } from '../services/api';
@@ -345,6 +345,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [connectionTest, setConnectionTest] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
+
+  // Initialize API health state
   const [apiHealth, setApiHealth] = useState({
     loading: true,
     healthy: 0,
@@ -355,68 +357,7 @@ const Dashboard = () => {
     services: []
   });
 
-
-  const { 
-    data: combinedData, 
-    loading: dashboardLoading, 
-    error: dashboardError,
-    refetch: refetchDashboard 
-  } = usePolling(() => taskService.listTasks(), 3600000);
-
-  let tasksData, dashboardData;
-  
-  if (Array.isArray(combinedData)) {
-    tasksData = combinedData;
-    dashboardData = null;
-  } else if (combinedData && typeof combinedData === 'object') {
-    tasksData = combinedData.tasks || [];
-    dashboardData = combinedData.dashboardData || null;
-  } else {
-    tasksData = [];
-    dashboardData = null;
-  }
-  
-  const tasksLoading = dashboardLoading;
-  const tasksError = dashboardError;
-  const refetchTasks = refetchDashboard;
-
-
-  const [directDashboardData, setDirectDashboardData] = React.useState(null);
-  
-  React.useEffect(() => {
-    const fetchDirectDashboardData = async () => {
-      try {
-        const apiBaseUrl = process.env.REACT_APP_API_URL || '';
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/dashboard_data` : '/api/dashboard_data';
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          setDirectDashboardData(data);
-        }
-      } catch (error) {
-        // Direct dashboard data fetch error
-      }
-    };
-    
-    const timer = setTimeout(() => {
-      fetchDirectDashboardData();
-    }, 3600000);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleTestConnection = async () => {
-    setTestLoading(true);
-    try {
-      const result = await testConnection();
-      setConnectionTest(result);
-    } catch (error) {
-      setConnectionTest({ error: error.message });
-    } finally {
-      setTestLoading(false);
-    }
-  };
-
+  // Fetch API health function - defined early to avoid hoisting issues
   const fetchApiHealth = useCallback(async () => {
     try {
       setApiHealth(prev => ({ ...prev, loading: true }));
@@ -461,16 +402,84 @@ const Dashboard = () => {
     }
   }, []);
 
-  const handleRefresh = useCallback(() => {
-    refetchDashboard();
-    fetchApiHealth();
-  }, [refetchDashboard, fetchApiHealth]);
-
+  // Initialize API health on mount
   useEffect(() => {
     fetchApiHealth();
     const interval = setInterval(fetchApiHealth, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, [fetchApiHealth]);
+
+  const refetchDashboardRef = useRef(null);
+
+  const { 
+    data: combinedData, 
+    loading: dashboardLoading, 
+    error: dashboardError,
+    refetch: refetchDashboard 
+  } = usePolling(() => taskService.listTasks(), 3600000);
+
+  // Store refetch function in ref to avoid dependency issues
+  refetchDashboardRef.current = refetchDashboard;
+
+  let tasksData, dashboardData;
+  
+  if (Array.isArray(combinedData)) {
+    tasksData = combinedData;
+    dashboardData = null;
+  } else if (combinedData && typeof combinedData === 'object') {
+    tasksData = combinedData.tasks || [];
+    dashboardData = combinedData.dashboardData || null;
+  } else {
+    tasksData = [];
+    dashboardData = null;
+  }
+  
+  const tasksLoading = dashboardLoading;
+  const tasksError = dashboardError;
+  const refetchTasks = refetchDashboard;
+
+  const handleRefresh = useCallback(() => {
+    if (refetchDashboardRef.current) {
+      refetchDashboardRef.current();
+    }
+    fetchApiHealth();
+  }, [fetchApiHealth]);
+
+  const [directDashboardData, setDirectDashboardData] = React.useState(null);
+  
+  React.useEffect(() => {
+    const fetchDirectDashboardData = async () => {
+      try {
+        const apiBaseUrl = process.env.REACT_APP_API_URL || '';
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/dashboard_data` : '/api/dashboard_data';
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setDirectDashboardData(data);
+        }
+      } catch (error) {
+        // Direct dashboard data fetch error
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      fetchDirectDashboardData();
+    }, 3600000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleTestConnection = async () => {
+    setTestLoading(true);
+    try {
+      const result = await testConnection();
+      setConnectionTest(result);
+    } catch (error) {
+      setConnectionTest({ error: error.message });
+    } finally {
+      setTestLoading(false);
+    }
+  };
 
 
 
