@@ -2435,21 +2435,41 @@ def service_status():
     try:
         service_statuses = []
         
-        # Read from the rich TES instance locations file instead of .tes_instances
+        # Use TES_INSTANCES (from .tes_instances) as the source of truth
+        # This ensures all configured instances are included
+        instances = TES_INSTANCES.copy()
+        
+        # Optionally enrich with location data from JSON file if it exists
         tes_locations_file = Path(__file__).parent / 'tes_instance_locations.json'
-        instances = []
+        location_map = {}
         if tes_locations_file.exists():
-            with open(tes_locations_file, 'r') as f:
-                instances = json.load(f)
-        else:
-            # Fallback to TES_INSTANCES if JSON file doesn't exist
-            instances = TES_INSTANCES
+            try:
+                with open(tes_locations_file, 'r') as f:
+                    location_data = json.load(f)
+                    if isinstance(location_data, list):
+                        for loc in location_data:
+                            url_key = loc.get('url', '').rstrip('/').lower()
+                            name_key = loc.get('name', '').lower()
+                            location_map[url_key] = loc
+                            location_map[name_key] = loc
+            except Exception as e:
+                app.logger.warning(f"Could not load location data: {e}")
             
         for instance in instances:
-            # Handle both JSON format and simple format
-            name = instance.get('name', instance.get('id', 'Unknown'))
-            url = instance.get('url', '')
-            country = instance.get('country', 'Unknown')
+            # Handle dict format from TES_INSTANCES (from .tes_instances file)
+            if isinstance(instance, dict):
+                name = instance.get('name', 'Unknown')
+                url = instance.get('url', '')
+            else:
+                # Fallback for other formats
+                name = str(instance.get('name', instance.get('id', 'Unknown')))
+                url = str(instance.get('url', ''))
+            
+            # Enrich with location data if available
+            url_key = url.rstrip('/').lower()
+            name_key = name.lower()
+            location_data = location_map.get(url_key) or location_map.get(name_key) or {}
+            country = location_data.get('country', 'Unknown')
             
             status_info = {
                 'name': name,
