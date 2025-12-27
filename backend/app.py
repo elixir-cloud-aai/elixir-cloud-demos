@@ -149,8 +149,8 @@ def load_tes_location_data():
     # Load location data from JSON if available
     location_map = {}
     try:
-        if TES_LOCATIONS_FILE.exists():
-            with open(TES_LOCATIONS_FILE) as f:
+if TES_LOCATIONS_FILE.exists():
+    with open(TES_LOCATIONS_FILE) as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     for loc in data:
@@ -614,7 +614,7 @@ def tes_locations():
         try:
             tes_base_url = instance.get("url", "").rstrip("/")
             if not tes_base_url:
-                return {**instance, "status": "unreachable"}
+            return {**instance, "status": "unreachable"}
 
             start_time = time.time()
             r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
@@ -1971,28 +1971,102 @@ Submitted: {workflow['submitted_at']}""")
     # Find related tasks for this workflow
     workflow_tes_url = workflow.get('tes_url', '').rstrip('/')
     workflow_submitted_time = workflow.get('submitted_at', '')
+    workflow_run_id = workflow.get('run_id', '')
     
-    # Find tasks submitted to the same TES instance around the same time
+    # Find tasks submitted to the same TES instance
+    # Use multiple matching strategies for better accuracy
     related_tasks = []
-    if workflow_tes_url and workflow_submitted_time:
+    matched_task_ids = set()  # Avoid duplicates
+    
+    if workflow_tes_url:
         try:
-            workflow_time = datetime.fromisoformat(workflow_submitted_time.replace('Z', '+00:00'))
-            time_window_start = workflow_time - timedelta(minutes=5)
-            time_window_end = workflow_time + timedelta(hours=24)
-            
+            # Strategy 1: Match by workflow_id/run_id if stored in task metadata
             for task in submitted_tasks:
                 task_tes_url = task.get('tes_url', '').rstrip('/')
-                task_submitted = task.get('submitted_at') or task.get('creation_time', '')
-                
-                if task_tes_url == workflow_tes_url and task_submitted:
-                    try:
-                        task_time = datetime.fromisoformat(task_submitted.replace('Z', '+00:00'))
-                        if time_window_start <= task_time <= time_window_end:
+                if task_tes_url == workflow_tes_url:
+                    # Check if task has workflow_id in metadata or tags
+                    task_workflow_id = (
+                        task.get('workflow_id') or 
+                        task.get('workflow_run_id') or
+                        task.get('run_id') or
+                        task.get('tags', {}).get('workflow_id') or
+                        task.get('tags', {}).get('run_id') or
+                        task.get('metadata', {}).get('workflow_id') or
+                        task.get('metadata', {}).get('run_id')
+                    )
+                    if task_workflow_id == workflow_run_id:
+                        task_id = task.get('task_id') or task.get('id')
+                        if task_id and task_id not in matched_task_ids:
                             related_tasks.append(task)
-                    except:
-                        pass
+                            matched_task_ids.add(task_id)
+            
+            # Strategy 2: Match by time window (expanded window for better coverage)
+            if workflow_submitted_time:
+                try:
+                    workflow_time = datetime.fromisoformat(workflow_submitted_time.replace('Z', '+00:00'))
+                    # Expanded time window: 30 minutes before to 48 hours after
+                    time_window_start = workflow_time - timedelta(minutes=30)
+                    time_window_end = workflow_time + timedelta(hours=48)
+                    
+                    for task in submitted_tasks:
+                        task_tes_url = task.get('tes_url', '').rstrip('/')
+                        task_submitted = task.get('submitted_at') or task.get('creation_time', '')
+                        task_id = task.get('task_id') or task.get('id')
+                        
+                        # Skip if already matched or different TES instance
+                        if task_id in matched_task_ids or task_tes_url != workflow_tes_url:
+                            continue
+                        
+                        if task_submitted:
+                            try:
+                                task_time = datetime.fromisoformat(task_submitted.replace('Z', '+00:00'))
+                                if time_window_start <= task_time <= time_window_end:
+                                    related_tasks.append(task)
+                                    matched_task_ids.add(task_id)
+                            except:
+                                pass
+                except Exception as e:
+                    print(f"Error matching tasks by time window: {e}")
+            
+            # Strategy 3: Match by task name/description containing workflow run_id
+            if workflow_run_id:
+                for task in submitted_tasks:
+                    task_tes_url = task.get('tes_url', '').rstrip('/')
+                    task_id = task.get('task_id') or task.get('id')
+                    
+                    # Skip if already matched or different TES instance
+                    if task_id in matched_task_ids or task_tes_url != workflow_tes_url:
+                        continue
+                    
+                    # Check if task name or description contains workflow run_id
+                    task_name = (task.get('task_name') or task.get('name') or '').lower()
+                    task_desc = (task.get('description') or '').lower()
+                    run_id_lower = workflow_run_id.lower()
+                    
+                    if run_id_lower in task_name or run_id_lower in task_desc:
+                        related_tasks.append(task)
+                        matched_task_ids.add(task_id)
+            
+            # Strategy 4: If no matches found, show all recent tasks from the same instance
+            # This helps users see what tasks exist even if matching failed
+            if not related_tasks and workflow_tes_url:
+                # Get all tasks from the same TES instance, sorted by submission time
+                same_instance_tasks = [
+                    task for task in submitted_tasks 
+                    if task.get('tes_url', '').rstrip('/') == workflow_tes_url
+                ]
+                # Sort by submission time (most recent first)
+                same_instance_tasks.sort(
+                    key=lambda t: t.get('submitted_at') or t.get('creation_time') or '',
+                    reverse=True
+                )
+                # Include up to 10 most recent tasks as potential matches
+                related_tasks = same_instance_tasks[:10]
+                
         except Exception as e:
             print(f"Error matching tasks to workflow: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Add workflow metadata
     if workflow.get('files'):
@@ -2044,8 +2118,17 @@ Submitted: {workflow['submitted_at']}""")
                     log_sections.append(f"  Logs: Unable to fetch (Error: {str(e)[:100]})")
     else:
         log_sections.append(f"\n=== Task Information ===")
-        log_sections.append("No related tasks found. This workflow may not have submitted any tasks yet, or tasks were submitted to a different instance.")
-        log_sections.append(f"\nTo view task logs, check tasks submitted to: {workflow_tes_url}")
+        log_sections.append("No related tasks found matching this workflow.")
+        log_sections.append(f"\nPossible reasons:")
+        log_sections.append(f"  • Tasks may not have been submitted yet")
+        log_sections.append(f"  • Tasks may have been submitted to a different TES instance")
+        log_sections.append(f"  • Tasks may have been submitted outside the matching time window (30 min before to 48 hours after workflow submission)")
+        log_sections.append(f"  • Tasks may not be linked to this workflow run_id: {workflow_run_id}")
+        log_sections.append(f"\nTo view all tasks from this TES instance, check:")
+        log_sections.append(f"  TES Instance: {workflow.get('tes_name', 'Unknown')}")
+        log_sections.append(f"  TES URL: {workflow_tes_url}")
+        log_sections.append(f"\nNote: Tasks submitted via external workflow runners (CWL, Snakemake, Nextflow)")
+        log_sections.append(f"may not be automatically linked. Check the Tasks page to view all submitted tasks.")
     
     log_content = '\n'.join(log_sections)
     
@@ -2444,7 +2527,7 @@ def service_status():
         location_map = {}
         if tes_locations_file.exists():
             try:
-                with open(tes_locations_file, 'r') as f:
+            with open(tes_locations_file, 'r') as f:
                     location_data = json.load(f)
                     if isinstance(location_data, list):
                         for loc in location_data:
@@ -2459,7 +2542,7 @@ def service_status():
             # Handle dict format from TES_INSTANCES (from .tes_instances file)
             if isinstance(instance, dict):
                 name = instance.get('name', 'Unknown')
-                url = instance.get('url', '')
+            url = instance.get('url', '')
             else:
                 # Fallback for other formats
                 name = str(instance.get('name', instance.get('id', 'Unknown')))
