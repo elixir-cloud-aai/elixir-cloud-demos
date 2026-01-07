@@ -126,10 +126,10 @@ const Sidebar = () => {
           <NavText>API Test</NavText>
         </NavItem>
         
-        <NavItem to="/middleware" $isActive={isActive('/middleware')}>
+        {/* <NavItem to="/middleware" $isActive={isActive('/middleware')}>
           <NavIcon><Shield size={18} /></NavIcon>
           <NavText>Middleware Manager</NavText>
-        </NavItem>
+        </NavItem> */}
       </NavSection>
 
       <NavSection>
