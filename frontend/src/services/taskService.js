@@ -105,27 +105,34 @@ export const taskService = {
       try {
         tasks = backendTasks
           .filter(task => {
+            // Check for both state and status fields (state is primary, status is fallback)
+            const taskState = task.state || task.status;
             return task && 
-                   task.task_id && 
+                   (task.task_id || task.id) && 
                    task.tes_url && 
-                   task.status &&
+                   taskState &&
                    !task.connection_error &&
                    !task.timeout_error &&
-                   task.status !== 'CONNECTION_ERROR' &&
-                   task.status !== 'TIMEOUT_ERROR';
+                   taskState !== 'CONNECTION_ERROR' &&
+                   taskState !== 'TIMEOUT_ERROR';
           })
-          .map(task => ({
-            id: task.task_id,
-            name: task.task_name || task.tes_name || 'Custom Task',
-            state: task.status || 'UNKNOWN',
-            tes_url: task.tes_url,
-            type: task.type,
-            creation_time: task.creation_time || new Date().toISOString(),
-            end_time: task.end_time,
-            tes_name: task.tes_name,
-            task_name: task.task_name,
-            instance_healthy: true
-          }));
+          .map(task => {
+            // Prefer state over status (state is the primary GA4GH TES field)
+            const taskState = task.state || task.status || 'UNKNOWN';
+            const taskId = task.task_id || task.id;
+            return {
+              id: taskId,
+              name: task.task_name || task.name || task.tes_name || 'Custom Task',
+              state: taskState,
+              tes_url: task.tes_url,
+              type: task.type,
+              creation_time: task.creation_time || new Date().toISOString(),
+              end_time: task.end_time,
+              tes_name: task.tes_name,
+              task_name: task.task_name || task.name,
+              instance_healthy: true
+            };
+          });
       } catch (taskError) {
         console.error('TaskService: Error transforming tasks, using empty array:', taskError);
         tasks = [];

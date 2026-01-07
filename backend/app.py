@@ -242,6 +242,104 @@ save_batch_runs(batch_runs)
 task_update_lock = threading.Lock()
 task_updater_started = False
 
+def fetch_task_status_from_tes(task_id, tes_url, tes_name='Unknown'):
+    """
+    Helper function to fetch task status from TES instance.
+    Returns tuple: (success: bool, task_data: dict or None, error: str or None)
+    """
+    if not task_id or not tes_url:
+        return False, None, "Missing task_id or tes_url"
+    
+    try:
+        # Get instance-specific credentials
+        credentials = get_instance_credentials(tes_name, tes_url)
+        
+        # Build request
+        tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
+        headers = {'Accept': 'application/json'}
+        auth = None
+        
+        if credentials.get('token'):
+            headers['Authorization'] = f"Bearer {credentials['token']}"
+        elif credentials.get('user') and credentials.get('password'):
+            auth = (credentials['user'], credentials['password'])
+        
+        # Fetch current task status from TES instance
+        response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+        
+        if response.status_code == 200:
+            task_data = response.json()
+            return True, task_data, None
+        elif response.status_code == 404:
+            return False, None, f"Task {task_id} not found on TES instance {tes_url}"
+        else:
+            return False, None, f"HTTP {response.status_code} error from TES instance"
+    
+    except requests.exceptions.Timeout:
+        return False, None, f"Timeout fetching task {task_id} status"
+    except requests.exceptions.ConnectionError as e:
+        return False, None, f"Connection error: {str(e)[:100]}"
+    except Exception as e:
+        return False, None, f"Error: {str(e)[:100]}"
+
+def update_single_task_status(task):
+    """
+    Update status for a single task from TES instance.
+    Returns True if task was updated, False otherwise.
+    """
+    task_id = task.get('task_id') or task.get('id')
+    tes_url = task.get('tes_url')
+    tes_name = task.get('tes_name', 'Unknown')
+    
+    if not task_id or not tes_url:
+        return False
+    
+    success, task_data, error = fetch_task_status_from_tes(task_id, tes_url, tes_name)
+    
+    if not success:
+        if error:
+            print(f"⚠️ {error}")
+        return False
+    
+    new_state = task_data.get('state', 'UNKNOWN')
+    
+    # Update task with latest data from TES
+    with task_update_lock:
+        # Find the task again (in case list was modified)
+        for t in submitted_tasks:
+            if (t.get('task_id') == task_id or t.get('id') == task_id) and t.get('tes_url') == tes_url:
+                old_state = t.get('state') or t.get('status', 'UNKNOWN')
+                
+                # Always update state and other fields to ensure we have the latest information
+                # This is especially important for terminal states
+                t['state'] = new_state
+                t['status'] = new_state  # Keep for backwards compatibility
+                
+                # Update timing information
+                if task_data.get('creation_time'):
+                    t['creation_time'] = task_data['creation_time']
+                if task_data.get('start_time'):
+                    t['start_time'] = task_data['start_time']
+                if task_data.get('end_time'):
+                    t['end_time'] = task_data['end_time']
+                
+                # Update logs if available
+                if task_data.get('logs'):
+                    t['logs'] = task_data['logs']
+                
+                # Log state changes
+                if new_state != old_state:
+                    print(f"✅ Updated task {task_id}: {old_state} → {new_state}")
+                    return True
+                elif new_state in ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED']:
+                    # Log verification of terminal states even if unchanged
+                    print(f"✅ Verified task {task_id} in terminal state: {new_state}")
+                    return True
+                
+                return False
+                
+    return False
+
 def update_task_statuses():
     """Background function to poll TES instances and update task statuses"""
     terminal_states = ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED']
@@ -265,74 +363,8 @@ def update_task_statuses():
             # Update each task's status
             updated_count = 0
             for task in tasks_to_update:
-                task_id = task.get('task_id') or task.get('id')
-                tes_url = task.get('tes_url')
-                
-                if not task_id or not tes_url:
-                    continue
-                
-                try:
-                    # Get instance-specific credentials
-                    instance_name = task.get('tes_name', 'Unknown')
-                    credentials = get_instance_credentials(instance_name, tes_url)
-                    
-                    # Build request
-                    tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
-                    headers = {'Accept': 'application/json'}
-                    auth = None
-                    
-                    if credentials.get('token'):
-                        headers['Authorization'] = f"Bearer {credentials['token']}"
-                    elif credentials.get('user') and credentials.get('password'):
-                        auth = (credentials['user'], credentials['password'])
-                    
-                    # Fetch current task status from TES instance
-                    response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
-                    
-                    if response.status_code == 200:
-                        task_data = response.json()
-                        new_state = task_data.get('state', 'UNKNOWN')
-                        
-                        # Update task if state changed
-                        with task_update_lock:
-                            # Find the task again (in case list was modified)
-                            for t in submitted_tasks:
-                                if (t.get('task_id') == task_id or t.get('id') == task_id) and t.get('tes_url') == tes_url:
-                                    old_state = t.get('state') or t.get('status', 'UNKNOWN')
-                                    
-                                    if new_state != old_state:
-                                        t['state'] = new_state
-                                        t['status'] = new_state  # Keep for backwards compatibility
-                                        
-                                        # Update timing information
-                                        if task_data.get('creation_time'):
-                                            t['creation_time'] = task_data['creation_time']
-                                        if task_data.get('start_time'):
-                                            t['start_time'] = task_data['start_time']
-                                        if task_data.get('end_time'):
-                                            t['end_time'] = task_data['end_time']
-                                        
-                                        # Update logs if available
-                                        if task_data.get('logs'):
-                                            t['logs'] = task_data['logs']
-                                        
-                                        print(f"✅ Updated task {task_id}: {old_state} → {new_state}")
-                                        updated_count += 1
-                                    
-                                    break
-                    elif response.status_code == 404:
-                        # Task not found - might have been deleted or never existed
-                        print(f"⚠️ Task {task_id} not found on TES instance {tes_url}")
-                    else:
-                        # Other error - log but don't fail
-                        print(f"⚠️ Failed to fetch task {task_id} status: HTTP {response.status_code}")
-                
-                except requests.exceptions.Timeout:
-                    print(f"⏱️ Timeout fetching task {task_id} status")
-                except requests.exceptions.ConnectionError as e:
-                    print(f"🔌 Connection error fetching task {task_id} status: {str(e)[:100]}")
-                except Exception as e:
-                    print(f"❌ Error updating task {task_id}: {str(e)[:100]}")
+                if update_single_task_status(task):
+                    updated_count += 1
             
             if updated_count > 0:
                 print(f"✅ Updated {updated_count} task statuses")
@@ -380,6 +412,18 @@ def run_async_middleware(coro):
     except RuntimeError:
         # No loop running, create new one
         return asyncio.run(coro)
+
+# @app.route('/api/middleware/status', methods=['GET'])
+# def get_middleware_status():
+#     """Return info about registered middlewares"""
+#     from backend.middleware_manager import middleware_manager
+#     return jsonify(middleware_manager.get_middleware_info())
+
+# @app.route('/api/middleware/metrics', methods=['GET'])
+# def get_middleware_metrics():
+#     """Return middleware metrics"""
+#     from backend.middleware_manager import middleware_manager
+#     return jsonify(middleware_manager.get_metrics())
 
 def create_middleware_context() -> MiddlewareContext:
     """Create middleware context from Flask request"""
@@ -1188,6 +1232,11 @@ def submit_task():
             response_data = response.json()
             task_id = response_data.get('id', str(uuid.uuid4()))
             
+            # Try to get initial state from TES response (some TES implementations return state immediately)
+            initial_state = response_data.get('state', 'QUEUED')
+            if initial_state not in ['UNKNOWN', 'QUEUED', 'INITIALIZING', 'RUNNING', 'COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED']:
+                initial_state = 'QUEUED'  # Fallback to QUEUED if state is invalid
+            
             # Store comprehensive task info locally for dashboard tracking
             local_task = {
                 # Basic GA4GH TES fields
@@ -1196,14 +1245,14 @@ def submit_task():
                 'name': tes_task['name'],
                 'task_name': tes_task['name'],  # Keep for backwards compatibility
                 'description': tes_task['description'],
-                'state': 'QUEUED',
-                'status': 'QUEUED',  # Keep for backwards compatibility
+                'state': initial_state,
+                'status': initial_state,  # Keep for backwards compatibility
                 
                 # Timing information
-                'creation_time': datetime.utcnow().isoformat(),
+                'creation_time': response_data.get('creation_time') or datetime.utcnow().isoformat(),
                 'submitted_at': datetime.utcnow().isoformat(),  # Keep for backwards compatibility
-                'start_time': None,
-                'end_time': None,
+                'start_time': response_data.get('start_time'),
+                'end_time': response_data.get('end_time'),
                 
                 # TES instance information
                 'tes_url': tes_url,
@@ -1233,7 +1282,7 @@ def submit_task():
                 
                 # Response and tracking
                 'response': response_data,
-                'logs': [],  # Will be populated as task runs
+                'logs': response_data.get('logs', []),  # Use logs from response if available
                 'task_log': [],  # Task execution logs
                 
                 # Submission metadata
@@ -1261,6 +1310,18 @@ def submit_task():
             }
             
             submitted_tasks.append(local_task)
+            
+            # Immediately check task status from TES to get the real current state
+            # This ensures we don't show "QUEUED" if the task has already progressed
+            print(f"🔍 Immediately checking status for newly submitted task {task_id}...")
+            try:
+                # Wait a brief moment for TES to process the submission
+                time.sleep(0.5)
+                if update_single_task_status(local_task):
+                    print(f"✅ Task {task_id} status updated immediately after submission")
+            except Exception as e:
+                print(f"⚠️ Could not immediately update task {task_id} status: {str(e)}")
+                # Continue anyway - background updater will pick it up
             
             # Update workflow status
             global current_workflow_step, latest_workflow_path
@@ -3358,53 +3419,79 @@ def get_middleware_metrics():
     except Exception as e:
         return jsonify({"error": f"Failed to get middleware metrics: {str(e)}"}), 500
 
+def run_async(coro):
+    """Run async coroutine in sync context, safe for Flask."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If already running, create a new task and wait for result
+            import nest_asyncio
+            nest_asyncio.apply()
+            return loop.run_until_complete(coro)
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No event loop, create one
+        return asyncio.run(coro)
+
 @app.route('/api/middleware/test', methods=['POST'])
 def test_middleware_chain():
     """Test the middleware chain with a sample request"""
     if not MIDDLEWARE_AVAILABLE:
         return jsonify({"error": "Middleware system not available"}), 503
-    
+
     try:
         test_data = request.get_json() or {}
-        
+
         # Create a test context
-        context = MiddlewareContext(
-            user_id=test_data.get('user_id', 'test_user'),
-            endpoint=test_data.get('endpoint', '/api/test'),
-            method=test_data.get('method', 'GET'),
-            headers=test_data.get('headers', {}),
-            data=test_data.get('data', {})
-        )
-        
+        context = MiddlewareContext({
+            'user_id': test_data.get('user_id', 'test_user'),
+            'endpoint': test_data.get('endpoint', '/api/test'),
+            'method': test_data.get('method', 'GET'),
+            'headers': test_data.get('headers', {}),
+            'data': test_data.get('data', {})
+        })
+
         # Process through middleware chain
-        should_continue, response = asyncio.run(
-            middleware_manager.process_request(context)
-        )
-        
-        if not should_continue:
+        results = run_async(middleware_manager.execute_chain(context))
+
+        # Check if any middleware blocked the request
+        blocked = False
+        block_message = None
+        for result in results:
+            # Adjust these checks to match your MiddlewareResult structure
+            if hasattr(result, "status") and getattr(result, "status", None) and str(result.status).lower() == "failed":
+                blocked = True
+                block_message = getattr(result, "message", "Blocked by middleware")
+                break
+
+        if blocked:
             return jsonify({
                 "status": "blocked",
                 "message": "Request blocked by middleware",
-                "response": response,
+                "response": block_message,
                 "context": {
-                    "user_id": context.user_id,
-                    "endpoint": context.endpoint,
-                    "method": context.method
+                    "user_id": getattr(context, "user_id", ""),
+                    "endpoint": getattr(context, "endpoint", ""),
+                    "method": getattr(context, "method", "")
                 }
             })
-        
+
         return jsonify({
             "status": "success",
             "message": "Request passed through middleware chain",
             "context": {
-                "user_id": context.user_id,
-                "endpoint": context.endpoint,
-                "method": context.method,
-                "processed_middlewares": len(middleware_manager.middlewares)
+                "user_id": getattr(context, "user_id", ""),
+                "endpoint": getattr(context, "endpoint", ""),
+                "method": getattr(context, "method", ""),
+                "processed_middlewares": len(results)
             }
         })
-    
+
     except Exception as e:
+        print(f"❌ Middleware test error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Failed to test middleware chain: {str(e)}"}), 500
 
 @app.route('/api/middleware/reset', methods=['POST'])
