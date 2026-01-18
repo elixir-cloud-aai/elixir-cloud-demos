@@ -20,7 +20,6 @@ const MiddlewareManager = () => {
     fetchMiddlewareStatus();
     fetchMiddlewareMetrics();
     
-    // Set up auto-refresh
     const interval = setInterval(() => {
       fetchMiddlewareMetrics();
     }, 5000);
@@ -70,7 +69,6 @@ const MiddlewareManager = () => {
       const data = await response.json();
       
       if (data.status === 'success') {
-        // Update local state
         setMiddlewares(prev => 
           prev.map(m => 
             m.name === middlewareName 
@@ -136,9 +134,9 @@ const MiddlewareManager = () => {
   };
 
   const getPriorityColor = (priority) => {
-    if (priority <= 3) return '#f44336'; // High priority - Red
-    if (priority <= 6) return '#ff9800'; // Medium priority - Orange  
-    return '#4CAF50'; // Low priority - Green
+    if (priority <= 3) return '#f44336';
+    if (priority <= 6) return '#ff9800';
+    return '#4CAF50';
   };
 
   if (loading) {
@@ -318,7 +316,6 @@ const MiddlewareManager = () => {
                 try {
                   setTestData({...testData, headers: JSON.parse(e.target.value)});
                 } catch (err) {
-                  // Invalid JSON, ignore
                 }
               }}
             />
@@ -332,7 +329,6 @@ const MiddlewareManager = () => {
                 try {
                   setTestData({...testData, data: JSON.parse(e.target.value)});
                 } catch (err) {
-                  // Invalid JSON, ignore
                 }
               }}
             />
@@ -347,7 +343,6 @@ const MiddlewareManager = () => {
         )}
       </div>
 
-      {/* Selected Middleware Details Modal */}
       {selectedMiddleware && (
         <div className="modal-overlay" onClick={() => setSelectedMiddleware(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>

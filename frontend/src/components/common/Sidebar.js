@@ -130,7 +130,12 @@ const Sidebar = () => {
           <NavIcon><Shield size={18} /></NavIcon>
           <NavText>Middleware Manager</NavText>
         </NavItem> */}
+        <NavItem to="/middleware" $isActive={isActive('/middleware')}>
+          <NavIcon><Server size={18} /></NavIcon>
+          <NavText>Middleware</NavText>
+        </NavItem>
       </NavSection>
+
 
       <NavSection>
         <SectionTitle>Settings</SectionTitle>

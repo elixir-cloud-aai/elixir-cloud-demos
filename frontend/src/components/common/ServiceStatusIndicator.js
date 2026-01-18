@@ -99,7 +99,6 @@ const ServiceStatusIndicator = ({
       try {
         const response = await api.get('/api/service_status');
         const data = response.data;
-        // Extract summary data from the full response
         const summaryData = {
           overall_health: data.summary?.overall_status || 'unhealthy',
           online_services: data.summary?.online_services || 0,

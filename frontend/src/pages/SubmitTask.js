@@ -193,8 +193,7 @@ const SubmitTask = () => {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-
-  // Use simple instances hook
+ 
   const { 
     instances, 
     loading: instancesLoading, 
@@ -206,10 +205,7 @@ const SubmitTask = () => {
     try {
       setTestingConnection(true);
       setError(null);
-      
-
-      
-      // Test with fetch first (use API service)
+       
       const apiBaseUrl = process.env.REACT_APP_API_URL || '';
       const testUrl = apiBaseUrl ? `${apiBaseUrl}/api/test_connection` : '/api/test_connection';
       const fetchResponse = await fetch(testUrl, {
@@ -222,8 +218,7 @@ const SubmitTask = () => {
       console.log('Fetch response status:', fetchResponse.status);
       const fetchData = await fetchResponse.json();
       console.log('Fetch data:', fetchData);
-      
-      // Then test with axios (our normal method)
+       
       const result = await testConnection();
       console.log('Axios result:', result);
       
@@ -235,17 +230,14 @@ const SubmitTask = () => {
       setTestingConnection(false);
     }
   };
-
-  // Removed old loadTesInstances function - now using useHealthyInstances hook
+ 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-
-  // Demo task configurations with working values
-  const getDemoTaskData = (demoType = 'basic') => {
-    // Get the first available healthy TES instance, or use a default one
+ 
+  const getDemoTaskData = (demoType = 'basic') => { 
     const defaultTesInstance = instances.length > 0 
       ? instances[0].url 
       : 'https://csc-tesk-noauth.rahtiapp.fi/v1/tasks';
@@ -295,9 +287,8 @@ const SubmitTask = () => {
   const handleRunDemo = (demoType = 'basic') => {
     const demoData = getDemoTaskData(demoType);
     setFormData(demoData);
-    setError(null); // Clear any existing errors
-    
-    // Show a confirmation message
+    setError(null);  
+     
     const taskNames = {
       basic: 'Basic Hello World',
       python: 'Python Script',
@@ -321,7 +312,7 @@ const SubmitTask = () => {
       
       const submitData = {
         tes_instance: formData.tes_instance,
-        task_type: 'custom', // Set to custom for user-defined tasks
+        task_type: 'custom', 
         task_name: formData.task_name,
         docker_image: formData.docker_image,
         command: formData.command,
@@ -338,8 +329,7 @@ const SubmitTask = () => {
       const result = await taskService.submitTask(submitData);
       
       console.log('Task submission result:', result);
-      
-      // Success - show success message and redirect to tasks page
+       
       if (result && result.message) {
         alert(`Success: ${result.message}`);
       } else {
@@ -348,8 +338,7 @@ const SubmitTask = () => {
       navigate('/tasks');
     } catch (err) {
       console.error('Task submission error:', err);
-      
-      // Extract detailed error information from response
+       
       let errorMessage = 'Failed to submit task';
       let errorReason = '';
       let errorType = 'unknown';
@@ -361,13 +350,11 @@ const SubmitTask = () => {
         errorReason = errorData.reason || '';
         errorType = errorData.error_type || errorType;
         errorCode = errorData.error_code || '';
-        
-        // Build a comprehensive error message
+         
         if (errorReason) {
           errorMessage = `${errorMessage}\n\nReason: ${errorReason}`;
         }
-        
-        // Add instance information if available
+         
         if (errorData.tes_name) {
           errorMessage = `${errorMessage}\n\nInstance: ${errorData.tes_name}`;
         }
@@ -377,21 +364,14 @@ const SubmitTask = () => {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
-      // Create error object with additional details
+       
       const detailedError = new Error(errorMessage);
       detailedError.reason = errorReason;
       detailedError.errorType = errorType;
       detailedError.errorCode = errorCode;
       
       setError(detailedError);
-      
-      // Show alert with detailed error information
-      let alertMessage = `❌ Task Submission Failed\n\n${errorMessage}`;
-      if (errorCode) {
-        alertMessage = `❌ Task Submission Failed (${errorCode})\n\n${errorMessage}`;
-      }
-      alert(alertMessage);
+       
     } finally {
       setSubmitting(false);
     }

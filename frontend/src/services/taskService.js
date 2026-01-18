@@ -1,6 +1,5 @@
 import api from './api';
 
-// Task-related API functions
 export const taskService = {
   
   getTaskDetails: async (tesUrl, taskId, viewLevel = 'FULL') => {
@@ -16,12 +15,10 @@ export const taskService = {
     } catch (error) {
       console.error('Error fetching task details:', error);
       
-      // Handle timeout errors
       if (error.code === 'ECONNABORTED') {
         throw new Error(`Timeout: TES instance ${tesUrl} is taking too long to respond. The task details may be available later.`);
       }
       
-      // Handle backend timeout responses (504)
       if (error.response?.status === 504) {
         const errorData = error.response?.data;
         if (errorData?.error_code === 'TIMEOUT') {
@@ -29,8 +26,7 @@ export const taskService = {
         }
         throw new Error(`TES instance taking too long to respond`);
       }
-      
-      // Handle backend connection errors (503)
+
       if (error.response?.status === 503) {
         const errorData = error.response?.data;
         if (errorData?.error_code === 'CONNECTION_ERROR') {
@@ -39,7 +35,6 @@ export const taskService = {
         throw new Error(`TES instance temporarily unavailable`);
       }
       
-      // Handle other server errors
       if (error.response?.status === 500) {
         throw new Error(`Server error when fetching task ${taskId} from ${tesUrl}. The TES instance may be temporarily unavailable.`);
       }
@@ -48,7 +43,6 @@ export const taskService = {
     }
   },
 
-  // Submit a new task
   submitTask: async (taskData) => {
     try {
       const response = await api.post('/api/submit_task', taskData, {
@@ -71,7 +65,6 @@ export const taskService = {
     }
   },
 
-  // Cancel a task
   cancelTask: async (tesUrl, taskId) => {
     try {
       const formData = new FormData();
@@ -90,10 +83,8 @@ export const taskService = {
     }
   },
 
-  // List all tasks and return dashboard data to avoid duplicate API calls
   listTasks: async () => {
     try {
-      // Get tasks from dashboard data which includes submitted_tasks
       const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
@@ -105,7 +96,6 @@ export const taskService = {
       try {
         tasks = backendTasks
           .filter(task => {
-            // Check for both state and status fields (state is primary, status is fallback)
             const taskState = task.state || task.status;
             return task && 
                    (task.task_id || task.id) && 
@@ -117,7 +107,6 @@ export const taskService = {
                    taskState !== 'TIMEOUT_ERROR';
           })
           .map(task => {
-            // Prefer state over status (state is the primary GA4GH TES field)
             const taskState = task.state || task.status || 'UNKNOWN';
             const taskId = task.task_id || task.id;
             return {
@@ -178,7 +167,6 @@ export const taskService = {
     }
   },
 
-  // Get task logs
   getTaskLogs: async (taskId) => {
     try {
       const response = await api.get(`/api/task_log/${taskId}`);
@@ -189,7 +177,6 @@ export const taskService = {
     }
   },
 
-  // Get service status
   getServiceStatus: async () => {
     try {
       const response = await api.get('/api/status');

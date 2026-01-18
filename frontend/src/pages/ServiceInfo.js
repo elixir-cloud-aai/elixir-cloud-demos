@@ -167,50 +167,56 @@ const ServiceInfo = () => {
   const [serviceInfo, setServiceInfo] = useState(null);
   const [tesInstances, setTesInstances] = useState([]);
   const [loadingInstances, setLoadingInstances] = useState(true);
-
-  // Load TES instances from backend
+ 
   useEffect(() => {
     loadTesInstances();
   }, []);
-
-  // Set default instance when instances are loaded
+ 
   useEffect(() => {
     if (tesInstances.length > 0 && !selectedInstance) {
       setSelectedInstance(tesInstances[0].url);
     }
   }, [tesInstances, selectedInstance]);
-
-  // Load TES instances from backend
+ 
   const loadTesInstances = async () => {
     try {
-      setLoadingInstances(true);
-      const response = await serviceInfoService.getTesInstances();
-      setTesInstances(response);
+      setLoadingInstances(true); 
+      const response = await serviceInfoService.getHealthyInstances();
+      if (response && response.instances && response.instances.length > 0) {
+        setTesInstances(response.instances);
+      } else { 
+        const allInstances = await serviceInfoService.getTesInstances();
+        setTesInstances(allInstances);
+      }
     } catch (err) {
-      console.error('Failed to load TES instances:', err);
-      // Fallback to static instances
+      console.error('Failed to load TES instances:', err); 
       setTesInstances(TES_INSTANCES);
     } finally {
       setLoadingInstances(false);
     }
   };
 
-  // Load service info when instance changes
   const loadServiceInfo = async () => {
-    if (!selectedInstance) return;
+  if (!selectedInstance) return;
 
-    try {
-      setLoading(true);
-      setError('');
-      const info = await serviceInfoService.getServiceInfo(selectedInstance);
-      setServiceInfo(info);
-    } catch (err) {
-      setError(`Failed to load service info: ${err.message}`);
-      setServiceInfo(null);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    setError('');
+    const info = await serviceInfoService.getServiceInfo(selectedInstance);
+     
+    if (info.error) { 
+      setError(`⚠️ ${info.errorStatus}: ${info.errorMessage}`);
     }
-  };
+    
+    setServiceInfo(info);
+  } catch (err) {
+    console.error('Unexpected error fetching service info:', err);
+    setError('❌ An unexpected error occurred while fetching service information. Please try again.');
+    setServiceInfo(null);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const formatServiceInfo = (info) => {
     if (!info) return null;
@@ -225,7 +231,6 @@ const ServiceInfo = () => {
       'Organization URL': info.organization?.url || 'Unknown',
       'Contact URL': info.contactUrl || 'Unknown',
       'Documentation URL': info.documentationUrl || 'Unknown',
-      'disk_gb': info.size_bytes || 'Unknown',
     };
 
     const apiInfo = {
@@ -275,7 +280,7 @@ const ServiceInfo = () => {
       {error && (
         <ErrorCard>
           <AlertTriangle size={16} />
-          {error}
+          <div>{error}</div>
         </ErrorCard>
       )}
 
@@ -287,7 +292,7 @@ const ServiceInfo = () => {
           </SectionTitle>
 
           {loading ? (
-            <LoadingSpinner />
+            <LoadingSpinner text="Fetching service information..." />
           ) : serviceInfo ? (
             (() => {
               const formattedInfo = formatServiceInfo(serviceInfo);
@@ -334,9 +339,9 @@ const ServiceInfo = () => {
                 </InfoGrid>
               );
             })()
-          ) : selectedInstance ? (
+          ) : !error ? (
             <NoDataMessage>
-              No service information available for this instance
+              Click "Refresh" to load service information for this instance
             </NoDataMessage>
           ) : null}
 

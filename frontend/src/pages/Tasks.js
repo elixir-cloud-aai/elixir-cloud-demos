@@ -193,60 +193,48 @@ const Tasks = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredTasks, setFilteredTasks] = useState([]);
-
-  // Poll tasks data
+ 
   const { 
     data: tasksData, 
     loading, 
     error,
     refetch 
   } = usePolling(taskService.listTasks, POLLING_INTERVALS.NORMAL);
-
-  // Handle task cancellation
+  
   const handleCancelTask = async (tesUrl, taskId) => {
     if (window.confirm('Are you sure you want to cancel this task?')) {
       try {
         await taskService.cancelTask(tesUrl, taskId);
-        refetch(); // Refresh the tasks list
+        refetch(); 
       } catch (error) {
         console.error('Error canceling task:', error);
         alert('Failed to cancel task: ' + error.message);
       }
     }
   };
-
-  // Handle viewing task details
+ 
   const handleViewDetails = (tesUrl, taskId) => {
     navigate(`/task-details?tes_url=${encodeURIComponent(tesUrl)}&task_id=${encodeURIComponent(taskId)}`);
   };
-
-  // Handle viewing task logs
+ 
   const handleViewLogs = (taskId) => {
     navigate(`/logs?type=task&taskId=${taskId}`);
-  };
-
-  // Filter tasks based on search term and only show healthy/running instances
+  }; 
   useEffect(() => {
-    let allTasks = [];
-    
-    // Extract tasks from the response structure
+    let allTasks = []; 
     if (tasksData?.tasks && Array.isArray(tasksData.tasks)) {
       allTasks = tasksData.tasks;
     } else if (Array.isArray(tasksData)) {
       allTasks = tasksData;
-    }
-
-    // Filter out tasks from unhealthy or error-prone TES instances
-    const healthyTasks = allTasks.filter(task => {
-      // Only show tasks that have valid data and from working instances
+    } 
+    const healthyTasks = allTasks.filter(task => { 
       return task && 
              task.id && 
              task.tes_url && 
              task.state &&
              task.state !== 'ERROR' &&
              task.state !== 'SYSTEM_ERROR' &&
-             task.state !== 'EXECUTOR_ERROR' &&
-             // Filter out tasks from instances that are known to be problematic
+             task.state !== 'EXECUTOR_ERROR' && 
              !task.error_prone_instance;
     });
 

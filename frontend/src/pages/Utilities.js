@@ -283,8 +283,7 @@ const ServiceStatus = styled.div`
   text-transform: uppercase;
 `;
 
-const Utilities = () => {
-  // Service Status State
+const Utilities = () => { 
   const [services, setServices] = useState([
     { name: 'Backend API', status: 'healthy', url: '/api/dashboard_data' },
     { name: 'Database', status: 'healthy', url: null },
@@ -293,33 +292,27 @@ const Utilities = () => {
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
-
-  // TES Instance Management State
+ 
   const [tesInstances, setTesInstances] = useState([]);
   const [instancesLoading, setInstancesLoading] = useState(true);
   const [instancesError, setInstancesError] = useState('');
   const [lastStatusUpdate, setLastStatusUpdate] = useState(null);
-
-  // Load TES instances
+ 
   const loadTesInstances = useCallback(async () => {
     try {
       setInstancesLoading(true);
-      setInstancesError('');
-      
-      // Get TES instances from dashboard data
+      setInstancesError('');  
       const response = await api.get('/api/dashboard_data');
       const tesInstancesData = response.data.tes_instances || [];
-      
-      // Check status for each instance
+       
       const instancesWithStatus = await Promise.all(
         tesInstancesData.map(async (instance) => {
           try {
             const startTime = Date.now();
-            
-            // Try to get service info from each instance
+             
             await api.get('/api/service_info', {
               params: { tes_url: instance.url },
-              timeout: 10000 // 10 second timeout
+              timeout: 10000 
             });
             
             const responseTime = Date.now() - startTime;
@@ -352,13 +345,10 @@ const Utilities = () => {
       setInstancesLoading(false);
     }
   }, []);
-
-  // Check service status
+ 
   const checkServiceStatus = useCallback(async () => {
     try {
-      setServicesLoading(true);
-      
-      // Define services inline to avoid dependency
+      setServicesLoading(true); 
       const currentServices = [
         { name: 'Backend API', status: 'healthy', url: '/api/dashboard_data' },
         { name: 'Database', status: 'healthy', url: null },
@@ -389,8 +379,7 @@ const Utilities = () => {
       setServicesLoading(false);
     }
   }, []);
-
-  // Test individual instance connection
+ 
   const testInstanceConnection = async (url) => {
     const instance = tesInstances.find(inst => inst.url === url);
     const instanceName = instance?.name || url;
@@ -403,8 +392,7 @@ const Utilities = () => {
       });
       
       const responseTime = Date.now() - startTime;
-      
-      // Update the specific instance
+       
       setTesInstances(prev => prev.map(inst => 
         inst.url === url 
           ? { 
@@ -416,8 +404,7 @@ const Utilities = () => {
             }
           : inst
       ));
-      
-      // Show success message
+       
       const serviceInfo = response.data;
       let successMessage = `✅ Connection Test Successful!\n\nInstance: ${instanceName}\nResponse Time: ${responseTime}ms`;
       
@@ -429,8 +416,7 @@ const Utilities = () => {
       }
       
       alert(successMessage);
-    } catch (error) {
-      // Extract detailed error information
+    } catch (error) { 
       let errorMessage = `❌ Connection Test Failed\n\nInstance: ${instanceName}\nURL: ${url}\n\n`;
       let errorReason = '';
       let errorCode = '';
@@ -465,9 +451,7 @@ const Utilities = () => {
         errorMessage += `Error: ${error.message}`;
       } else {
         errorMessage += `Error: Unknown error occurred`;
-      }
-      
-      // Update the specific instance with error details
+      } 
       setTesInstances(prev => prev.map(inst => 
         inst.url === url 
           ? { 
@@ -481,20 +465,14 @@ const Utilities = () => {
             }
           : inst
       ));
-      
-      // Show detailed error alert
       alert(errorMessage);
     }
   };
 
-  // Refresh instance status
   const refreshInstanceStatus = () => {
     loadTesInstances();
-  };
-
-  // Auto-refresh every hour
-  useEffect(() => {
-    // Initial load
+  }; 
+  useEffect(() => { 
     const initialLoad = async () => {
       await loadTesInstances();
       await checkServiceStatus();
@@ -505,11 +483,10 @@ const Utilities = () => {
     const interval = setInterval(() => {
       loadTesInstances();
       checkServiceStatus();
-    }, 60 * 60 * 1000); // 1 hour
+    }, 60 * 60 * 1000); 
     
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty to avoid infinite loops
+    return () => clearInterval(interval); 
+  }, []); 
 
   return (
     <UtilitiesContainer>
@@ -517,8 +494,7 @@ const Utilities = () => {
         <PageTitle>Utilities & Instance Management</PageTitle>
         <PageSubtitle>System monitoring and TES instance management with real-time status checking</PageSubtitle>
       </PageHeader>
-
-      {/* Service Status Section */}
+ 
       <ServiceStatusSection>
         <SectionHeader>
           <div>
@@ -559,8 +535,7 @@ const Utilities = () => {
           </ServiceGrid>
         )}
       </ServiceStatusSection>
-
-      {/* TES Instance Management Section */}
+ 
       <TESInstancesSection>
         <SectionHeader>
           <div>

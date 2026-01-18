@@ -1,7 +1,6 @@
 import api from './api';
 
 export const mapService = {
-  // Get TES instance locations with geographic coordinates
   getTesLocations: async () => {
     try {
       const response = await api.get('/api/tes_locations');
@@ -12,13 +11,11 @@ export const mapService = {
     }
   },
 
-  // Get workflow execution paths
   getWorkflowPaths: async () => {
     try {
       const response = await api.get('/api/dashboard_data');
       const { batch_runs, workflow_runs } = response.data;
       
-      // Combine and format workflow paths
       const allWorkflows = [
         ...batch_runs.map(run => ({
           id: run.run_id,
@@ -46,7 +43,6 @@ export const mapService = {
     }
   },
 
-  // Get latest workflow status for path animation
   getLatestWorkflowStatus: async () => {
     try {
       const response = await api.get('/api/latest_workflow_status');

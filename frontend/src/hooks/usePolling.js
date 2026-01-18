@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Custom hook for polling data at regular intervals
 export const usePolling = (fetchFunction, interval = 5000, dependencies = []) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,13 +17,10 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
       }
     } catch (err) {
       if (isMountedRef.current) {
-        // Handle timeout errors (504) and external service errors gracefully
-        // Don't show these as critical errors since they're expected with slow TES instances
         if (err.response?.status === 504 || 
             err.code === 'ECONNABORTED' || 
             (err.message && err.message.includes('timeout'))) {
           console.warn('External service timeout (expected with slow TES instances):', err.message);
-          // Keep previous data if available, don't set error for timeouts
           if (!data) {
             setError(new Error('Some external services are responding slowly. Data may be incomplete.'));
           }
@@ -34,7 +30,6 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
             setError(new Error('Some external services are temporarily unavailable. Data may be incomplete.'));
           }
         } else {
-          // Only show critical errors that indicate real problems
           setError(err);
           console.error('Critical polling error:', err);
         }
@@ -47,7 +42,7 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
   };
 
   const startPolling = () => {
-    fetchData(); // Initial fetch
+    fetchData();
     intervalRef.current = setInterval(fetchData, interval);
   };
 
@@ -71,7 +66,7 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
       isMountedRef.current = false;
       stopPolling();
     };
-  }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
+  }, dependencies);
 
   useEffect(() => {
     return () => {

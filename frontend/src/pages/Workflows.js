@@ -356,25 +356,21 @@ const Workflows = () => {
   const [error, setError] = useState('');
   const [workflowRuns, setWorkflowRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(true);
-
-  // Use healthy instances hook
+ 
   const { instances, loading: instancesLoading } = useInstances();
-  
-  // Log modal state
+   
   const [showLogModal, setShowLogModal] = useState(false);
   const [currentLog, setCurrentLog] = useState('');
   const [currentLogRunId, setCurrentLogRunId] = useState('');
   const [logLoading, setLogLoading] = useState(false);
-
-  // Refs for file inputs
+ 
   const cwlFileRef = useRef(null);
   const cwlInputRef = useRef(null);
   const nextflowFileRef = useRef(null);
   const nextflowConfigRef = useRef(null);
   const snakefileRef = useRef(null);
   const smkDirRef = useRef(null);
-
-  // Form states for different workflow types
+ 
   const [cwlForm, setCwlForm] = useState({
     tesInstance: '',
     cwlFile: null,
@@ -396,8 +392,7 @@ const Workflows = () => {
     smkDir: null,
     distributionLogic: ''
   });
-
-  // Load workflow runs
+ 
   useEffect(() => {
     loadWorkflowRuns();
   }, []);
@@ -408,13 +403,11 @@ const Workflows = () => {
       const runs = await workflowService.getWorkflowRuns();
       setWorkflowRuns(runs);
     } catch (err) {
-      console.error('Error loading workflow runs:', err);
-      // Don't show errors for timeout/connectivity issues - just continue with empty data
+      console.error('Error loading workflow runs:', err); 
       if (err.response?.status === 504 || err.response?.status === 503 || err.message?.includes('timeout')) {
         console.warn('External services slow/unavailable - showing empty workflow runs');
         setWorkflowRuns([]);
-      } else {
-        // Only set error for critical issues
+      } else { 
         console.error('Critical workflow loading error:', err);
       }
     } finally {
@@ -427,7 +420,7 @@ const Workflows = () => {
       console.log('Opening logs modal for workflow:', runId);
       setLogLoading(true);
       setCurrentLogRunId(runId);
-      setCurrentLog(''); // Clear previous logs
+      setCurrentLog('');  
       setShowLogModal(true);
       
       console.log('Fetching workflow logs...');
@@ -458,8 +451,7 @@ const Workflows = () => {
     try {
       setLoading(true);
       setError('');
-      
-      // Prepare form data for backend
+       
       const workflowData = {
         wf_type: 'cwl',
         wf_tes_instance: cwlForm.tesInstance,
@@ -494,8 +486,7 @@ const Workflows = () => {
     try {
       setLoading(true);
       setError('');
-      
-      // Prepare form data for backend
+       
       const workflowData = {
         wf_type: 'nextflow',
         wf_tes_instance: nextflowForm.tesInstance,
@@ -532,8 +523,7 @@ const Workflows = () => {
     try {
       setLoading(true);
       setError('');
-      
-      // Prepare form data for backend
+       
       const workflowData = {
         wf_type: 'snakemake',
         wf_tes_instance: snakemakeForm.tesInstance,
@@ -849,8 +839,7 @@ const Workflows = () => {
           </WorkflowRunsTable>
         )}
       </WorkflowSection>
-
-      {/* Log Modal */}
+ 
       {showLogModal && (
         <LogModal onClick={closeLogModal}>
           <LogContent onClick={(e) => e.stopPropagation()}>

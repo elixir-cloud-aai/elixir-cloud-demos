@@ -4,11 +4,8 @@ const path = require('path');
 
 const app = express();
 const port = 3000;
-
-// Serve static files from build directory
 app.use(express.static(path.join(__dirname, 'build')));
 
-// Proxy API requests to backend
 app.use('/api', createProxyMiddleware({
   target: 'http://tes-dashboard-backend-service.federated-analytics-showcase.svc.cluster.local:8000',
   changeOrigin: true,
@@ -19,7 +16,6 @@ app.use('/api', createProxyMiddleware({
   }
 }));
 
-// Handle React Router - send all non-API requests to index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });

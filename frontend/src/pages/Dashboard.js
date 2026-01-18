@@ -346,7 +346,6 @@ const Dashboard = () => {
   const [connectionTest, setConnectionTest] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
 
-  // Initialize API health state
   const [apiHealth, setApiHealth] = useState({
     loading: true,
     healthy: 0,
@@ -356,135 +355,116 @@ const Dashboard = () => {
     status: 'unknown',
     services: [],
     error: null,
-    lastUpdated: null
+    lastUpdated: null,
+    loaded: false
   });
 
-  // Fetch API health function - use ref to avoid circular dependency
   const fetchApiHealthRef = useRef(null);
   
   const fetchApiHealth = useCallback(async () => {
-    try {
-      setApiHealth(prev => ({ ...prev, loading: true }));
-      const response = await api.get('/api/service_status');
-      const data = response?.data || {};
-      
-      // Get services from response - check both 'services' array and 'summary' object
-      const services = Array.isArray(data.services) ? data.services : [];
-      const summary = data.summary || {};
-      
-      // Total is the actual number of services returned
-      const total = services.length || summary.total_services || 0;
-      
-      // Calculate health status directly from services array for accuracy
-      // Match EXACTLY the logic used in Utilities page:
-      // Utilities page marks as 'healthy' ONLY if /api/service_info succeeds (200 response)
-      // So we need to be very strict - only count as healthy if:
-      // 1. status is 'online' 
-      // 2. health is 'healthy'
-      // 3. response_time exists and is a positive number (actual successful response)
-      // 4. No error in details
-      // 5. NOT a 403 response (authentication required = not healthy for our purposes)
-      // 6. Must have successfully called a service-info endpoint (not just basic connectivity)
-      const healthy = services.filter(s => {
-        // Must be online and healthy
-        if (s?.status !== 'online' || s?.health !== 'healthy') {
-          return false;
-        }
+  try {
+    setApiHealth(prev => ({ ...prev, loading: true }));
+    
+    const dashboardResponse = await api.get('/api/dashboard_data');
+    const allInstances = dashboardResponse.data.tes_instances || [];
+    
+    console.log('📋 Checking health for', allInstances.length, 'instances');
+    
+    const healthCheckPromises = allInstances.map(async (instance) => {
+      try {
+        const startTime = Date.now();
+        await api.get('/api/service_info', {
+          params: { tes_url: instance.url },
+          timeout: 5000 
+        });
         
-        // Must have a valid response time (actual response received)
-        const hasResponseTime = typeof s?.response_time === 'number' && s?.response_time > 0;
-        if (!hasResponseTime) {
-          return false;
-        }
+        const responseTime = Date.now() - startTime;
         
-        // Must not have any error
-        if (s?.details?.error) {
-          return false;
-        }
-        
-        // Must not be a 403 authentication required response
-        const message = s?.details?.message || '';
-        if (message.includes('authentication') || message.includes('403')) {
-          return false;
-        }
-        
-        // Must have successfully called a service-info endpoint (not just basic connectivity)
-        // Utilities page only marks as healthy if /api/service_info succeeds (200 response)
-        // The endpoint_used should indicate a proper service-info call
-        const endpointUsed = s?.details?.endpoint_used || '';
-        
-        // If endpoint_used exists, verify it's a proper service-info endpoint
-        if (endpointUsed) {
-          // Must be a service-info endpoint (ga4gh/tes/v1/service-info, /service-info, or /api/service-info)
-          // If it's just the base URL without these paths, it's likely a false positive
-          const isServiceInfoEndpoint = endpointUsed.includes('service-info') || 
-                                       endpointUsed.includes('ga4gh/tes/v1') ||
-                                       endpointUsed.includes('/ga4gh/tes');
-          if (!isServiceInfoEndpoint) {
-            return false;
-          }
-        } else {
-          // No endpoint_used info - be conservative and don't count as healthy
-          // This matches Utilities page which only marks healthy if service_info call succeeds
-          return false;
-        }
-        
-        return true;
-      }).length || 0;
-      
-      // Everything else is unhealthy
-      const unhealthy = total - healthy;
-      
-      const percentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
-      
-      let status = 'unknown';
-      if (total === 0) {
-        status = 'unknown';
-      } else if (percentage >= 80) {
-        status = 'healthy';
-      } else if (percentage >= 50) {
-        status = 'warning';
-      } else {
-        status = 'error';
+        return {
+          name: instance.name,
+          url: instance.url,
+          status: 'online',
+          health: 'healthy',
+          response_time: responseTime,
+          last_checked: new Date().toISOString()
+        };
+      } catch (error) {
+        return {
+          name: instance.name,
+          url: instance.url,
+          status: 'offline',
+          health: 'unhealthy',
+          response_time: null,
+          last_checked: new Date().toISOString(),
+          error: error.message
+        };
       }
-      
-      setApiHealth({
-        loading: false,
-        healthy: healthy || 0,
-        unhealthy: unhealthy || 0,
-        total: total || 0,
-        percentage: percentage || 0,
-        status,
-        services: services || [],
-        lastUpdated: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error fetching API health status:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Unable to connect to health monitoring service';
-      
-      setApiHealth(prev => ({
-        ...prev,
-        loading: false,
-        status: 'error',
-        error: errorMessage,
-        // Preserve previous counts if available, otherwise show 0
-        healthy: prev.total > 0 ? prev.healthy : 0,
-        unhealthy: prev.total > 0 ? prev.unhealthy : 0,
-        total: prev.total > 0 ? prev.total : 0,
-        percentage: prev.total > 0 ? prev.percentage : 0
-      }));
+    });
+    
+    const healthResults = await Promise.all(healthCheckPromises);
+    
+    const total = healthResults.length;
+    const healthy = healthResults.filter(r => r.health === 'healthy').length;
+    const unhealthy = total - healthy;
+    const percentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
+    
+    let status = 'unknown';
+    if (total === 0) {
+      status = 'unknown';
+    } else if (percentage >= 80) {
+      status = 'healthy';
+    } else if (percentage >= 50) {
+      status = 'warning';
+    } else {
+      status = 'error';
     }
-  }, []);
+    
+    console.log('📈 Health check results:', {
+      total,
+      healthy,
+      unhealthy,
+      percentage,
+      status
+    });
+    
+    setApiHealth({
+      loading: false,
+      loaded: true,
+      healthy: healthy || 0,
+      unhealthy: unhealthy || 0,
+      total: total || 0,
+      percentage: percentage || 0,
+      status,
+      services: healthResults,
+      lastUpdated: new Date().toISOString(),
+      error: null
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching API health status:', error);
+    
+    const errorMessage = error.response?.data?.error || error.message || 'Unable to connect to health monitoring service';
+    
+    setApiHealth(prev => ({
+      ...prev,
+      loading: false,
+      loaded: true,
+      status: 'error',
+      error: errorMessage,
+      healthy: 0,
+      unhealthy: 0,
+      total: 0,
+      percentage: 0
+    }));
+  }
+}, []);
   
-  // Store in ref to avoid dependency issues
   fetchApiHealthRef.current = fetchApiHealth;
 
-  // Initialize API health on mount only (no auto-refresh)
   useEffect(() => {
     if (fetchApiHealthRef.current) {
       fetchApiHealthRef.current();
     }
-    // No interval - only refresh on manual button click
   }, []);
 
   const refetchDashboardRef = useRef(null);
@@ -496,7 +476,6 @@ const Dashboard = () => {
     refetch: refetchDashboard 
   } = usePolling(() => taskService.listTasks(), 3600000);
 
-  // Store refetch function in ref to avoid dependency issues
   refetchDashboardRef.current = refetchDashboard;
 
   let tasksData, dashboardData;
@@ -538,7 +517,6 @@ const Dashboard = () => {
           setDirectDashboardData(data);
         }
       } catch (error) {
-        // Direct dashboard data fetch error
       }
     };
     
@@ -581,7 +559,6 @@ const Dashboard = () => {
     return <LoadingSpinner text="Loading dashboard..." />;
   }
 
-  // Calculate pie chart data
   const getHealthColor = (status) => {
     if (status === 'healthy') return '#28a745';
     if (status === 'warning') return '#ffc107';
@@ -600,7 +577,6 @@ const Dashboard = () => {
       const healthyPercentage = total > 0 ? (healthy / total) : 0;
       const unhealthyPercentage = total > 0 ? (unhealthy / total) : 0;
       
-      // Calculate segment lengths
       const healthyLength = Math.max(0, healthyPercentage * circumference);
       const unhealthyLength = Math.max(0, unhealthyPercentage * circumference);
       
@@ -608,7 +584,6 @@ const Dashboard = () => {
         <ChartContainer>
           <div style={{ position: 'relative', width: size, height: size }}>
             <DonutChart width={size} height={size}>
-              {/* Background circle */}
               <circle
                 cx={size / 2}
                 cy={size / 2}
@@ -617,7 +592,6 @@ const Dashboard = () => {
                 stroke="#e9ecef"
                 strokeWidth={strokeWidth}
               />
-              {/* Healthy segment */}
               {healthy > 0 && healthyLength > 0 && (
                 <circle
                   cx={size / 2}
@@ -631,7 +605,6 @@ const Dashboard = () => {
                   strokeLinecap="round"
                 />
               )}
-              {/* Unhealthy segment - starts after healthy segment */}
               {unhealthy > 0 && unhealthyLength > 0 && (
                 <circle
                   cx={size / 2}
@@ -669,10 +642,6 @@ const Dashboard = () => {
 
   return (
     <DashboardContainer>
-      {/* API Health Status */}
-      
-
-      {/* Stats Grid */}
       <StatsGrid>
         <StatCard 
           color="#007bff" 
@@ -796,126 +765,134 @@ const Dashboard = () => {
       </StatsGrid>
 
       <HealthCard>
-        <HealthHeader>
-          <HealthTitle>
-            <Server size={24} />
-            API Health Status
-          </HealthTitle>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {apiHealth.loading ? (
-              <LoadingSpinner size="small" />
-            ) : (
-              <HealthStatusBadge status={apiHealth?.status || 'unknown'}>
-                {apiHealth?.status === 'healthy' && <CheckCircle size={16} />}
-                {apiHealth?.status === 'warning' && <AlertTriangle size={16} />}
-                {apiHealth?.status === 'error' && <XCircle size={16} />}
-                {apiHealth?.status === 'healthy' ? 'All Systems Operational' : 
-                 apiHealth?.status === 'warning' ? 'Degraded Performance' : 
-                 'Service Issues Detected'}
-              </HealthStatusBadge>
-            )}
+  <HealthHeader>
+    <HealthTitle>
+      <Server size={24} />
+      API Health Status
+    </HealthTitle>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {apiHealth.loading ? (
+        <LoadingSpinner size="small" />
+      ) : (
+        <HealthStatusBadge status={apiHealth?.status || 'unknown'}>
+          {apiHealth?.status === 'healthy' && <CheckCircle size={16} />}
+          {apiHealth?.status === 'warning' && <AlertTriangle size={16} />}
+          {apiHealth?.status === 'error' && <XCircle size={16} />}
+          {apiHealth?.status === 'healthy' ? 'All Systems Operational' : 
+           apiHealth?.status === 'warning' ? 'Degraded Performance' : 
+           apiHealth?.status === 'error' ? 'Service Issues Detected' : 'Status Unknown'}
+        </HealthStatusBadge>
+      )}
+      <RefreshButton 
+        onClick={() => {
+          if (fetchApiHealthRef.current) {
+            fetchApiHealthRef.current();
+          }
+        }} 
+        disabled={apiHealth.loading}
+        title="Refresh API health status"
+      >
+        <RefreshCw size={14} style={{ marginRight: '5px' }} />
+        {apiHealth.loading ? 'Checking...' : 'Refresh'}
+      </RefreshButton>
+    </div>
+  </HealthHeader>
+  
+  {apiHealth.loading && (
+    <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+      <LoadingSpinner size="small" text="Checking API health status..." />
+    </div>
+  )}
+  {!apiHealth.loading && apiHealth.loaded && (
+    <>
+      {apiHealth.error ? (
+        <div style={{ padding: '20px' }}>
+          <ErrorMessage message={apiHealth.error} />
+          <div style={{ marginTop: '15px', textAlign: 'center' }}>
             <RefreshButton 
               onClick={() => {
                 if (fetchApiHealthRef.current) {
                   fetchApiHealthRef.current();
                 }
-              }} 
-              disabled={apiHealth.loading}
-              title="Refresh API health status"
+              }}
             >
               <RefreshCw size={14} style={{ marginRight: '5px' }} />
-              {apiHealth.loading ? 'Checking...' : 'Refresh'}
+              Retry
             </RefreshButton>
           </div>
-        </HealthHeader>
-        
-        {!apiHealth.loading && apiHealth.total !== undefined && (
-          <HealthContent>
-            {renderDonutChart()}
-            <HealthStats>
-              <HealthStatRow color="#28a745">
-                <HealthStatLabel>
-                  <CheckCircle size={18} color="#28a745" />
-                  Healthy Services
-                </HealthStatLabel>
-                <HealthStatValue color="#28a745">
-                  {apiHealth?.healthy || 0} / {apiHealth?.total || 0}
-                </HealthStatValue>
-              </HealthStatRow>
-              
-              <HealthStatRow color="#dc3545">
-                <HealthStatLabel>
-                  <XCircle size={18} color="#dc3545" />
-                  Unhealthy Services
-                </HealthStatLabel>
-                <HealthStatValue color="#dc3545">
-                  {apiHealth?.unhealthy || 0} / {apiHealth?.total || 0}
-                </HealthStatValue>
-              </HealthStatRow>
-              
-              <HealthStatRow color="#17a2b8">
-                <HealthStatLabel>
-                  <Server size={18} color="#17a2b8" />
-                  Total Services
-                </HealthStatLabel>
-                <HealthStatValue color="#17a2b8">
-                  {apiHealth?.total || 0}
-                </HealthStatValue>
-              </HealthStatRow>
-              
-              <HealthSummary status={apiHealth?.status || 'unknown'}>
-                {apiHealth?.status === 'healthy' && (
-                  <>
-                    <strong>✓ All Systems Operational</strong><br />
-                    All {apiHealth?.total || 0} TES service instances are online and responding normally. System health is optimal.
-                  </>
-                )}
-                {apiHealth?.status === 'warning' && (
-                  <>
-                    <strong>⚠ Degraded Performance</strong><br />
-                    {apiHealth?.unhealthy || 0} of {apiHealth?.total || 0} TES instances are currently unavailable. {apiHealth?.healthy || 0} instances remain operational. Some services may experience delays.
-                  </>
-                )}
-                {apiHealth?.status === 'error' && (
-                  <>
-                    <strong>✗ Service Issues Detected</strong><br />
-                    {apiHealth?.unhealthy || 0} of {apiHealth?.total || 0} TES instances are currently unavailable. Only {apiHealth?.healthy || 0} instances are operational. Please check the System Status page for detailed information.
-                  </>
-                )}
-                {apiHealth?.status === 'unknown' && (
-                  <>
-                    <strong>⏳ Status Unknown</strong><br />
-                    Unable to determine system health status. Please click Refresh to check the current status of all TES instances.
-                  </>
-                )}
-                {apiHealth?.error && (
-                  <>
-                    <br /><br />
-                    <strong>Error:</strong> {apiHealth.error}
-                  </>
-                )}
-              </HealthSummary>
-              {apiHealth?.lastUpdated && (
-                <div style={{ marginTop: '15px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
-                  Last updated: {formatDate(new Date(apiHealth.lastUpdated))}
-                </div>
+        </div>
+      ) : (
+        <HealthContent>
+          {renderDonutChart()}
+          <HealthStats>
+            <HealthStatRow color="#28a745">
+              <HealthStatLabel>
+                <CheckCircle size={18} color="#28a745" />
+                Healthy Services
+              </HealthStatLabel>
+              <HealthStatValue color="#28a745">
+                {apiHealth.healthy} / {apiHealth.total}
+              </HealthStatValue>
+            </HealthStatRow>
+            
+            <HealthStatRow color="#dc3545">
+              <HealthStatLabel>
+                <XCircle size={18} color="#dc3545" />
+                Unhealthy Services
+              </HealthStatLabel>
+              <HealthStatValue color="#dc3545">
+                {apiHealth.unhealthy} / {apiHealth.total}
+              </HealthStatValue>
+            </HealthStatRow>
+            
+            <HealthStatRow color="#17a2b8">
+              <HealthStatLabel>
+                <Server size={18} color="#17a2b8" />
+                Total Services
+              </HealthStatLabel>
+              <HealthStatValue color="#17a2b8">
+                {apiHealth.total}
+              </HealthStatValue>
+            </HealthStatRow>
+            
+            <HealthSummary status={apiHealth?.status || 'unknown'}>
+              {apiHealth?.status === 'healthy' && (
+                <>
+                  <strong>✓ All Systems Operational</strong><br />
+                  All {apiHealth.total} TES service instances are online and responding normally. System health is optimal.
+                </>
               )}
-            </HealthStats>
-          </HealthContent>
-        )}
-        {apiHealth.loading && (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-            <LoadingSpinner size="small" text="Checking API health status..." />
-          </div>
-        )}
-        {!apiHealth.loading && apiHealth.total === 0 && !apiHealth.error && (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-            No TES instances configured. Please check the backend configuration.
-          </div>
-        )}
-      </HealthCard>
+              {apiHealth?.status === 'warning' && (
+                <>
+                  <strong>⚠ Degraded Performance</strong><br />
+                  {apiHealth.unhealthy} of {apiHealth.total} TES instances are currently unavailable. {apiHealth.healthy} instances remain operational. Some services may experience delays.
+                </>
+              )}
+              {apiHealth?.status === 'error' && (
+                <>
+                  <strong>✗ Service Issues Detected</strong><br />
+                  {apiHealth.unhealthy} of {apiHealth.total} TES instances are currently unavailable. Only {apiHealth.healthy} instances are operational. Please check the System Status page for detailed information.
+                </>
+              )}
+              {apiHealth?.status === 'unknown' && apiHealth.total === 0 && (
+                <>
+                  <strong>⚠️ No Services Configured</strong><br />
+                  No TES instances are currently configured or available. Please check the backend configuration or add TES instances in the Utilities section.
+                </>
+              )}
+            </HealthSummary>
+            {apiHealth?.lastUpdated && (
+              <div style={{ marginTop: '15px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
+                Last updated: {formatDate(new Date(apiHealth.lastUpdated))}
+              </div>
+            )}
+          </HealthStats>
+        </HealthContent>
+      )}
+    </>
+  )}
+</HealthCard>
 
-      {/* Connection Test */}
       <ContentCard style={{ marginBottom: '20px' }}>
         <CardHeader>
           <CardTitle>🔗 Connection Status</CardTitle>
@@ -964,9 +941,7 @@ const Dashboard = () => {
 
       </ContentCard>
 
-      {/* Content Grid */}
       <ContentGrid>
-        {/* Recent Tasks */}
         <ContentCard>
           <CardHeader>
             <CardTitle>Recent Tasks</CardTitle>
@@ -1001,8 +976,6 @@ const Dashboard = () => {
             <EmptyState>No tasks found</EmptyState>
           )}
         </ContentCard>
-
-        {/* System Overview */}
         <ContentCard>
           <CardHeader>
             <CardTitle>System Overview</CardTitle>

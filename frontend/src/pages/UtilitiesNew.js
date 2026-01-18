@@ -457,8 +457,7 @@ const EmptyState = styled.div`
     margin-bottom: 1.5rem;
   }
 `;
-
-// Modal Components
+ 
 const ModalOverlay = styled.div`
   position: fixed;
   top: 0;
@@ -618,14 +617,12 @@ const CodePreview = styled.div`
   }
 `;
 
-const Utilities = () => {
-  // Service Status State
+const Utilities = () => { 
   const [services, setServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
-
-  // Middleware Management State
+ 
   const [middlewares, setMiddlewares] = useState([]);
   const [middlewareLoading, setMiddlewareLoading] = useState(true);
   const [middlewareError, setMiddlewareError] = useState(null);
@@ -652,8 +649,7 @@ const Utilities = () => {
     'caching',
     'monitoring'
   ];
-
-  // Service Status Functions
+ 
   const checkServiceHealth = useCallback(async () => {
     try {
       const response = await api.get('/api/service-info');
@@ -716,8 +712,7 @@ const Utilities = () => {
       setServicesLoading(false);
     }
   }, []);
-
-  // Middleware Management Functions
+ 
   const fetchMiddlewares = useCallback(async () => {
     try {
       setMiddlewareLoading(true);
@@ -729,10 +724,9 @@ const Utilities = () => {
           id: middleware.name,
           ...middleware,
           order: middleware.priority || index,
-          source: 'local' // Default for existing middlewares
+          source: 'local'  
         }));
-        
-        // Sort by priority (lower number = higher priority)
+         
         middlewareList.sort((a, b) => a.priority - b.priority);
         setMiddlewares(middlewareList);
         setMiddlewareError(null);
@@ -774,26 +768,22 @@ const Utilities = () => {
     const newMiddlewares = [...middlewares];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     
-    if (targetIndex >= 0 && targetIndex < newMiddlewares.length) {
-      // Swap priorities
+    if (targetIndex >= 0 && targetIndex < newMiddlewares.length) { 
       const currentPriority = newMiddlewares[index].priority;
       const targetPriority = newMiddlewares[targetIndex].priority;
       
       newMiddlewares[index].priority = targetPriority;
       newMiddlewares[targetIndex].priority = currentPriority;
-      
-      // Re-sort by priority
+       
       newMiddlewares.sort((a, b) => a.priority - b.priority);
       setMiddlewares(newMiddlewares);
-      
-      // TODO: Send priority updates to backend
+       
       console.log(`Moving middleware ${newMiddlewares[index].name} ${direction}`);
     }
   };
 
   const addMiddleware = async () => {
-    try {
-      // Validation
+    try { 
       if (!newMiddleware.name.trim()) {
         alert('Middleware name is required');
         return;
@@ -803,14 +793,12 @@ const Utilities = () => {
         alert('GitHub URL is required for external middlewares');
         return;
       }
-
-      // Check for duplicate names
+ 
       if (middlewares.some(m => m.name.toLowerCase() === newMiddleware.name.toLowerCase())) {
         alert('Middleware with this name already exists');
         return;
       }
-
-      // Create new middleware entry
+ 
       const middlewareToAdd = {
         ...newMiddleware,
         id: newMiddleware.name.toLowerCase().replace(/\s+/g, '_'),
@@ -835,8 +823,7 @@ const Utilities = () => {
         enabled: true,
         config: {}
       });
-
-      // TODO: Send to backend to install middleware
+ 
       console.log('Adding middleware:', middlewareToAdd);
     } catch (err) {
       alert('Error adding middleware: ' + err.message);
@@ -845,8 +832,7 @@ const Utilities = () => {
 
   const removeMiddleware = async (middlewareId) => {
     if (window.confirm(`Are you sure you want to remove middleware "${middlewareId}"?`)) {
-      setMiddlewares(prev => prev.filter(m => m.id !== middlewareId));
-      // TODO: Send removal request to backend
+      setMiddlewares(prev => prev.filter(m => m.id !== middlewareId)); 
       console.log('Removing middleware:', middlewareId);
     }
   };
@@ -854,13 +840,11 @@ const Utilities = () => {
   const viewMiddlewareCode = (middleware) => {
     if (middleware.source === 'github') {
       window.open(middleware.githubUrl, '_blank');
-    } else {
-      // Open local file or show code modal
+    } else { 
       setSelectedMiddleware(middleware);
     }
   };
-
-  // Effects
+ 
   useEffect(() => {
     checkServiceHealth();
     const interval = setInterval(checkServiceHealth, 3000);
@@ -870,8 +854,7 @@ const Utilities = () => {
   useEffect(() => {
     fetchMiddlewares();
   }, [fetchMiddlewares]);
-
-  // Utility Functions
+ 
   const getStatusIcon = (status) => {
     switch (status) {
       case 'online':
@@ -912,8 +895,7 @@ const Utilities = () => {
         <PageTitle>Utilities</PageTitle>
         <PageSubtitle>System monitoring and gateway middleware management</PageSubtitle>
       </PageHeader>
-
-      {/* Service Status Section */}
+ 
       <ServiceStatusSection>
         <SectionHeader>
           <div>
@@ -998,8 +980,7 @@ const Utilities = () => {
           </>
         )}
       </ServiceStatusSection>
-
-      {/* Gateway Middleware Management Section */}
+ 
       <MiddlewareSection>
         <SectionHeader>
           <div>
@@ -1126,8 +1107,7 @@ const Utilities = () => {
           </MiddlewareList>
         )}
       </MiddlewareSection>
-
-      {/* Add Middleware Modal */}
+ 
       {showAddModal && (
         <ModalOverlay onClick={() => setShowAddModal(false)}>
           <ModalContent onClick={(e) => e.stopPropagation()}>
@@ -1236,8 +1216,7 @@ const Utilities = () => {
           </ModalContent>
         </ModalOverlay>
       )}
-
-      {/* Middleware Code View Modal */}
+ 
       {selectedMiddleware && (
         <ModalOverlay onClick={() => setSelectedMiddleware(null)}>
           <ModalContent onClick={(e) => e.stopPropagation()}>

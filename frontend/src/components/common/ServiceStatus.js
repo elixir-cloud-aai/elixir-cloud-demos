@@ -292,16 +292,13 @@ const ServiceStatus = () => {
       setLoading(false);
     }
   };
-
-  // Fetch service status on component mount and set up auto-refresh
   useEffect(() => {
     fetchServiceStatus();
     
-    // Set up auto-refresh every 30 seconds
     const interval = setInterval(fetchServiceStatus, 30000);
     
     return () => clearInterval(interval);
-  }, []); // Empty dependencies array
+  }, []);
 
   const handleRefresh = () => {
     fetchServiceStatus();
@@ -324,8 +321,6 @@ const ServiceStatus = () => {
   }
 
   const { services = [], summary = {} } = statusData || {};
-  
-  // Calculate error services count for display
   const errorServices = services.filter(s => s.status === 'error' || s.status === 'timeout').length;
 
   return (
@@ -343,7 +338,6 @@ const ServiceStatus = () => {
         </RefreshButton>
       </StatusHeader>
 
-      {/* Health Summary */}
       <HealthSummary>
         <HealthCard 
           bgColor="#f8fff8" 
@@ -386,7 +380,6 @@ const ServiceStatus = () => {
         </HealthCard>
       </HealthSummary>
 
-      {/* Services List */}
       <ServicesGrid>
         {services.map((service, index) => (
           <ServiceCard key={service.name || index} status={service.status}>
@@ -442,7 +435,6 @@ const ServiceStatus = () => {
         ))}
       </ServicesGrid>
 
-      {/* System Capabilities based on overall status */}
       <CapabilityStatus>
         <CapabilityCard available={summary.online_services > 0}>
           <CapabilityIcon available={summary.online_services > 0}>

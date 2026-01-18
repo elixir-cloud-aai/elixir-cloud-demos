@@ -377,7 +377,6 @@ const InstanceManagement = () => {
     description: ''
   });
 
-  // Load instances from backend
   useEffect(() => {
     loadInstances();
   }, []);
@@ -385,8 +384,6 @@ const InstanceManagement = () => {
   const loadInstances = async () => {
     try {
       setLoading(true);
-      
-      // Load managed instances (user-configurable)
       try {
         console.log('🔄 Loading managed instances from /api/nodes');
         const managedResponse = await api.get('/api/nodes');
@@ -408,7 +405,6 @@ const InstanceManagement = () => {
         setManagedInstances([]);
       }
 
-      // Load available instances (discovered/preconfigured)
       try {
         console.log('🔄 Loading available instances from /api/instances');
         const availableResponse = await api.get('/api/instances');
@@ -444,7 +440,7 @@ const InstanceManagement = () => {
 
     try {
       const instanceData = {
-        id: Date.now().toString(), // Simple ID generation
+        id: Date.now().toString(),
         name: newInstance.name,
         url: newInstance.url,
         country: newInstance.country || 'Unknown',
@@ -465,7 +461,7 @@ const InstanceManagement = () => {
       });
 
       if (response.ok) {
-        await loadInstances(); // Reload instances
+        await loadInstances();
         setShowModal(false);
         setNewInstance({ name: '', url: '', country: '', description: '' });
       } else {
@@ -490,7 +486,7 @@ const InstanceManagement = () => {
       });
 
       if (response.ok) {
-        await loadInstances(); // Reload instances
+        await loadInstances();
       } else {
         throw new Error('Failed to remove instance');
       }
@@ -508,9 +504,6 @@ const InstanceManagement = () => {
     items.splice(result.destination.index, 0, reorderedItem);
 
     setManagedInstances(items);
-
-    // Update order on backend (if your API supports it)
-    // For now, we'll just update the local state
   };
 
   if (loading) {
@@ -534,7 +527,6 @@ const InstanceManagement = () => {
         </AddButton>
       </Header>
 
-      {/* Available Instances Section */}
       <SectionHeader>
         <SectionTitle>Available TES Instances</SectionTitle>
         <SectionBadge>{availableInstances.length}</SectionBadge>
@@ -581,7 +573,6 @@ const InstanceManagement = () => {
         </InstanceList>
       )}
 
-      {/* Managed Instances Section */}
       <SectionHeader>
         <SectionTitle>Managed TES Instances</SectionTitle>
         <SectionBadge>{managedInstances.length}</SectionBadge>

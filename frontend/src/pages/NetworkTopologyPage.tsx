@@ -18,7 +18,6 @@ import { POLLING_INTERVALS } from './utils/constants';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorMessage from './components/ErrorMessage';
 
-// Types and Interfaces
 interface TooltipData {
   show: boolean;
   x: number;
@@ -27,7 +26,6 @@ interface TooltipData {
   data: any;
 }
 
-// Styled Components
 const PageContainer = styled.div`
   padding: 24px;
   max-width: 100%;
@@ -540,14 +538,13 @@ const LegendDot = styled.div<{ color: string }>`
   box-shadow: 0 0 0 2px ${props => props.color};
 `;
 
-// Enhanced TES instances with more geographic locations and details
 const TES_LOCATIONS = [
   {
     id: 'elixir-cz',
     name: 'TESK Production',
     country: 'Czech Republic',
     status: 'healthy' as const,
-    x: 65, // Europe
+    x: 65, 
     y: 35,
     tasks: 15,
     workflows: 8,
@@ -592,7 +589,7 @@ const TES_LOCATIONS = [
     name: 'TESK North America',
     country: 'Canada',
     status: 'healthy' as const,
-    x: 25, // North America
+    x: 25,  
     y: 30,
     tasks: 8,
     workflows: 4,
@@ -637,7 +634,7 @@ const TES_LOCATIONS = [
     name: 'TES Gateway',
     country: 'Global',
     status: 'healthy' as const,
-    x: 50, // Center
+    x: 50,  
     y: 50,
     tasks: 45,
     workflows: 25,
@@ -704,23 +701,23 @@ interface StorageLocation {
   name: string;
   type: 'S3' | 'MinIO' | 'HDFS' | 'NFS';
   location: string;
-  x: number; // Keep for backward compatibility
+  x: number; 
   y: number;
   coordinates: { lat: number; lng: number };
   capacity: string;
   usage: number;
 }
 
-// Storage locations with accurate geographic coordinates
+ 
 const STORAGE_LOCATIONS: StorageLocation[] = [
   {
     id: 'storage-eu-central',
     name: 'EU Central Storage',
     type: 'S3',
     location: 'Frankfurt, Germany',
-    x: 54.1, // Keep for backward compatibility
+    x: 54.1,  
     y: 32.5,
-    coordinates: { lat: 50.1109, lng: 8.6821 }, // Frankfurt coordinates
+    coordinates: { lat: 50.1109, lng: 8.6821 },  
     capacity: '500TB',
     usage: 65
   },
@@ -731,7 +728,7 @@ const STORAGE_LOCATIONS: StorageLocation[] = [
     location: 'Stockholm, Sweden',
     x: 58.5,
     y: 24.8,
-    coordinates: { lat: 59.3293, lng: 18.0686 }, // Stockholm coordinates
+    coordinates: { lat: 59.3293, lng: 18.0686 },  
     capacity: '300TB',
     usage: 45
   },
@@ -742,7 +739,7 @@ const STORAGE_LOCATIONS: StorageLocation[] = [
     location: 'Virginia, USA',
     x: 28.2,
     y: 45.5,
-    coordinates: { lat: 39.0458, lng: -76.6413 }, // Virginia coordinates
+    coordinates: { lat: 39.0458, lng: -76.6413 }, 
     capacity: '800TB',
     usage: 78
   },
@@ -753,7 +750,7 @@ const STORAGE_LOCATIONS: StorageLocation[] = [
     location: 'California, USA', 
     x: 18.8,
     y: 46.2,
-    coordinates: { lat: 37.7749, lng: -122.4194 }, // California coordinates
+    coordinates: { lat: 37.7749, lng: -122.4194 }, 
     capacity: '1.2PB',
     usage: 52
   },
@@ -764,7 +761,7 @@ const STORAGE_LOCATIONS: StorageLocation[] = [
     location: 'London, UK',
     x: 49.8,
     y: 31.8,
-    coordinates: { lat: 51.5074, lng: -0.1278 }, // London coordinates
+    coordinates: { lat: 51.5074, lng: -0.1278 }, 
     capacity: '2PB',
     usage: 34
   }
@@ -792,7 +789,6 @@ const NetworkTopologyPage: React.FC = () => {
     isRealTimeMode ? 2000 : POLLING_INTERVALS.DASHBOARD
   );
 
-  // Simulate real-time workflow executions
   useEffect(() => {
     if (!dashboardData?.batch_runs) return;
 
@@ -813,14 +809,12 @@ const NetworkTopologyPage: React.FC = () => {
 
     setWorkflowExecutions(executions);
   }, [dashboardData]);
-
-  // Helper function to generate storage locations for workflow
+ 
   const generateStorageLocations = (index: number): string[] => {
     const storageOptions = ['storage-eu-central', 'storage-eu-north', 'storage-na-east', 'storage-global'];
     return storageOptions.slice(0, (index % 3) + 1);
   };
-
-  // Helper function to generate workflow steps
+ 
   const generateWorkflowSteps = (type: string, status: string): Array<{
     name: string;
     status: 'pending' | 'running' | 'completed' | 'failed';
@@ -853,7 +847,6 @@ const NetworkTopologyPage: React.FC = () => {
     }));
   };
 
-  // Generate workflow execution path based on mode
   const generateWorkflowPath = (_mode: string): string[] => {
     const allPaths = [
       ['tes-gateway', 'tes-uk-node'],
@@ -894,8 +887,7 @@ const NetworkTopologyPage: React.FC = () => {
     const instance = TES_LOCATIONS.find(loc => loc.id === instanceId);
     return instance?.status || 'healthy';
   };
-
-  // Custom Leaflet icons
+ 
 const createCustomIcon = (color: string, type: 'server' | 'database') => {
   const iconHtml = type === 'server' 
     ? `<div style="background: ${color}; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><svg width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><rect x="2" y="3" width="20" height="3" rx="1" ry="1"/><rect x="2" y="9" width="20" height="3" rx="1" ry="1"/><rect x="2" y="15" width="20" height="3" rx="1" ry="1"/><line x1="8" y1="5" x2="8" y2="5"/><line x1="8" y1="11" x2="8" y2="11"/><line x1="8" y1="17" x2="8" y2="17"/></svg></div>`
@@ -1075,12 +1067,11 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                   </Popup>
                 </Marker>
               ))}
-              
-              {/* Test Connections - Direct lines between TES instances */}
+               
               <Polyline
                 positions={[
-                  [52.5200, 13.4050], // Berlin (TES Gateway)
-                  [51.5074, -0.1278]  // London (UK TES Node)
+                  [52.5200, 13.4050], 
+                  [51.5074, -0.1278]  
                 ]}
                 pathOptions={{
                   color: '#4299e1',
@@ -1091,8 +1082,8 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
               />
               <Polyline
                 positions={[
-                  [51.5074, -0.1278], // London
-                  [40.7128, -74.0060] // New York
+                  [51.5074, -0.1278], 
+                  [40.7128, -74.0060] 
                 ]}
                 pathOptions={{
                   color: '#48bb78',
@@ -1103,8 +1094,8 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
               />
               <Polyline
                 positions={[
-                  [40.7128, -74.0060], // New York
-                  [37.7749, -122.4194] // San Francisco
+                  [40.7128, -74.0060], 
+                  [37.7749, -122.4194] 
                 ]}
                 pathOptions={{
                   color: '#ed8936',
@@ -1112,9 +1103,7 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                   opacity: 0.8,
                   dashArray: '12,8'
                 }}
-              />
-              
-              {/* Animated Workflow Connections */}
+              /> 
               {showWorkflowPaths && workflowExecutions
                 .filter(workflow => workflow.status === 'RUNNING')
                 .map(workflow => {
@@ -1127,8 +1116,7 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                     .map(instance => [instance!.coordinates.lat, instance!.coordinates.lng] as [number, number]);
                   
                   if (pathCoordinates.length < 2) return null;
-                  
-                  // Different colors for different workflow types
+                   
                   const workflowColor = workflow.type === 'Nextflow' ? '#4299e1' :
                                       workflow.type === 'CWL' ? '#48bb78' :
                                       workflow.type === 'Snakemake' ? '#ed8936' : '#9f7aea';
@@ -1149,11 +1137,10 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                     />
                   );
                 })}
-              
-              {/* Data Flow Connections between Storage and TES */}
+               
               {showDataFlow && workflowExecutions
                 .filter(workflow => workflow.status === 'RUNNING')
-                .slice(0, 3) // Show only first 3 for performance
+                .slice(0, 3)  
                 .map(workflow => {
                   return workflow.storageLocations?.map((storageId, index) => {
                     const storage = STORAGE_LOCATIONS.find(s => s.id === storageId);
@@ -1178,11 +1165,10 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                     );
                   });
                 }).flat().filter(Boolean)}
-              
-              {/* Inter-TES Connections for Multi-site Workflows */}
+               
               {showWorkflowPaths && workflowExecutions
                 .filter(workflow => workflow.status === 'RUNNING' && workflow.path.length > 2)
-                .slice(0, 2) // Show only 2 multi-site workflows
+                .slice(0, 2) 
                 .map(workflow => {
                   const connections = [];
                   for (let i = 0; i < workflow.path.length - 1; i++) {
@@ -1209,8 +1195,7 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                   }
                   return connections;
                 }).flat()}
-              
-              {/* Workflow Path Lines */}
+               
               {showWorkflowPaths && workflowExecutions
                 .filter(workflow => !selectedWorkflow || workflow.id === selectedWorkflow)
                 .map(workflow => {
@@ -1236,8 +1221,7 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
                     />
                   );
                 })}
-              
-              {/* Data Flow Lines between Storage and TES instances */}
+               
               {showDataFlow && selectedWorkflow && (
                 <>
                   {workflowExecutions
@@ -1567,8 +1551,7 @@ const createCustomIcon = (color: string, type: 'server' | 'database') => {
           </SidebarContent>
         </Sidebar>
       </MainContent>
-      
-      {/* Professional Tooltip */}
+       
       <Tooltip 
         show={tooltip.show} 
         x={tooltip.x} 

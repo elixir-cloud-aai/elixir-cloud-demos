@@ -31,8 +31,7 @@ import { useTESData } from './hooks/useTESData';
 import NetworkDiscoveryService from './services/networkDiscovery';
 import DataFlowMonitoringService from './services/dataFlowMonitoring';
 import WorkflowTopologyVisualizer from './components/WorkflowTopologyVisualizer';
-
-// Enhanced Styled Components with Better Formatting and Alignment
+ 
 const PageContainer = styled.div`
   padding: 0;
   max-width: 100%;
@@ -739,8 +738,7 @@ const _AlertBanner = styled.div<{ type: 'warning' | 'error' | 'info' }>`
     }
   }};
 `;
-
-// Enhanced Custom Leaflet icons with professional styling
+ 
 const createTESIcon = (status: 'healthy' | 'processing' | 'unhealthy', instanceType?: string) => {
   const color = status === 'healthy' ? '#38a169' : 
                 status === 'processing' ? '#ed8936' : '#e53e3e';
@@ -799,8 +797,7 @@ const createTESIcon = (status: 'healthy' | 'processing' | 'unhealthy', instanceT
     iconAnchor: [24, 24]
   });
 };
-
-// Enhanced data flow line creation
+ 
 const createDataFlowLine = (transfer: any, instances: any[]) => {
   const sourceInstance = instances.find(i => i.id === transfer.source.id);
   const destInstance = instances.find(i => i.id === transfer.destination.id);
@@ -813,9 +810,9 @@ const createDataFlowLine = (transfer: any, instances: any[]) => {
   const destLng = destInstance.location?.lng || 10;
 
   const speed = transfer.metrics?.transferSpeed || 0;
-  const color = speed > 100 * 1024 * 1024 ? '#38a169' : // > 100MB/s - green
-               speed > 10 * 1024 * 1024 ? '#ed8936' : // > 10MB/s - orange
-               '#e53e3e'; // < 10MB/s - red
+  const color = speed > 100 * 1024 * 1024 ? '#38a169' : 
+               speed > 10 * 1024 * 1024 ? '#ed8936' : 
+               '#e53e3e'; 
   
   const weight = Math.max(2, Math.min(8, transfer.progress.percentage / 15));
   
@@ -838,8 +835,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
   const [_filterStatus, _setFilterStatus] = useState<'all' | 'healthy' | 'processing' | 'unhealthy'>('all');
   const [_networkTopology, setNetworkTopology] = useState<any>(null);
   const [dataFlowMetrics, setDataFlowMetrics] = useState<any>(null);
-
-  // Use the real-time TES data hook
+ 
   const {
     instances,
     activeTasks: _activeTasks,
@@ -858,8 +854,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
     enableRealTimePolling: isRealTimeMode,
     maxTasks: 50
   });
-
-  // Initialize data flow monitoring
+ 
   useEffect(() => {
     DataFlowMonitoringService.startMonitoring();
     
@@ -875,8 +870,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
       clearInterval(interval);
     };
   }, []);
-
-  // Discover network topology
+ 
   useEffect(() => {
     const discoverTopology = async () => {
       try {
@@ -895,11 +889,9 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
 
     discoverTopology();
   }, []);
-
-  // Get active data transfers
+ 
   const activeTransfers = DataFlowMonitoringService.getActiveTransfers();
-
-  // Get instance status helper
+ 
   const getInstanceStatus = (instanceId: string): 'healthy' | 'processing' | 'unhealthy' => {
     const metrics = getInstanceMetrics(instanceId);
     if (!metrics) return 'unhealthy';
@@ -908,14 +900,12 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
     if (metrics.status === 'processing') return 'processing';
     return 'unhealthy';
   };
-
-  // Filter instances based on status
+ 
   const _filteredInstances = instances.filter(instance => {
     if (_filterStatus === 'all') return true;
     return getInstanceStatus(instance.id) === _filterStatus;
   });
-
-  // Get network health statistics with enhanced metrics
+ 
   const networkHealth = {
     total: instances.length,
     healthy: instances.filter(i => getInstanceStatus(i.id) === 'healthy').length,
@@ -935,16 +925,14 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
       return acc + (metrics?.resourceUsage?.memory?.percentage || 0);
     }, 0) / instances.length || 0
   };
-
-  // Enhanced network status assessment
+ 
   const getNetworkStatus = () => {
     const activeCount = instances.filter(i => getInstanceStatus(i.id) === 'healthy').length;
     const totalCount = instances.length;
     const errorCount = errors.length;
-    
-    // Calculate mock CPU and memory usage for demo
-    const cpuUsage = Math.floor(Math.random() * 30) + 20; // 20-50%
-    const memoryUsage = Math.floor(Math.random() * 40) + 30; // 30-70%
+     
+    const cpuUsage = Math.floor(Math.random() * 30) + 20; 
+    const memoryUsage = Math.floor(Math.random() * 40) + 30; 
     
     let health: 'healthy' | 'warning' | 'critical';
     let status: string;
@@ -973,8 +961,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
       errorCount
     };
   };
-
-  // Handle errors and loading states with enhanced UI
+ 
   if (isDiscovering && instances.length === 0) {
     return (
       <PageContainer>
@@ -1223,8 +1210,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
-            
-            {/* TES Instance Markers */}
+             
             {instances.map(instance => {
               const lat = instance.location?.lat || 50 + Math.random() * 20;
               const lng = instance.location?.lng || Math.random() * 40;
@@ -1332,8 +1318,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
                 </Marker>
               );
             })}
-
-            {/* Enhanced Data Flow Lines */}
+ 
             {showDataFlow && activeTransfers.map((transfer) => {
               if (transfer.status !== 'transferring') return null;
               
@@ -1498,8 +1483,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
                                   <span className="label">Memory:</span>
                                   <span className="value">{metrics.resourceUsage.memory.percentage.toFixed(1)}%</span>
                                 </div>
-                                
-                                {/* CPU Usage Progress Bar */}
+                                 
                                 <div className="progress-bar">
                                   <div 
                                     className="progress-fill" 
@@ -1571,8 +1555,7 @@ const RealTimeNetworkTopologyPage: React.FC = () => {
                               {(transfer.metrics.transferSpeed / (1024 * 1024)).toFixed(1)}MB/s
                             </span>
                           </div>
-                          
-                          {/* Transfer Progress Bar */}
+                           
                           <div className="progress-bar">
                             <div 
                               className="progress-fill" 

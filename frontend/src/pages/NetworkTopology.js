@@ -8,7 +8,6 @@ import api from '../services/api';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
@@ -16,7 +15,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
-// Enhanced Styled Components with Better Formatting and Alignment
 const PageContainer = styled.div`
   padding: 0;
   max-width: 100vw;
@@ -765,21 +763,18 @@ const NetworkTopology = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [instances, setInstances] = useState([]);
-  // Storage locations are currently static, but kept separate from TES instances.
-  // You can later move these to a backend endpoint if you want them to be fully dynamic.
   const [storageLocations, setStorageLocations] = useState([]);
   const [workflowPaths, setWorkflowPaths] = useState([]);
   const [selectedWorkflow, setSelectedWorkflow] = useState('');
   const [showConnections, setShowConnections] = useState(true);
   const [showStorage, setShowStorage] = useState(true);
-  const [currentView, setCurrentView] = useState('map'); // 'topology' or 'map'
+  const [currentView, setCurrentView] = useState('map'); 
   const [activeTab, setActiveTab] = useState('instances');
   const [selectedInstance, setSelectedInstance] = useState(null);
   const [networkStatus, setNetworkStatus] = useState('success');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRegion, setFilterRegion] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  // Disable automatic polling by default; user can toggle it on from the UI if desired
   const [realTimePolling, setRealTimePolling] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [dataTransfers, setDataTransfers] = useState([]);
@@ -796,7 +791,6 @@ const NetworkTopology = () => {
       setLoading(true);
       setError('');
 
-      // Load real-time data from backend APIs only
       const [locationsResponse, dashboardResponse] = await Promise.all([
         api.get('/api/tes_locations'),
         api.get('/api/dashboard_data')
@@ -805,7 +799,6 @@ const NetworkTopology = () => {
       const locations = Array.isArray(locationsResponse.data) ? locationsResponse.data : [];
       const dashboardData = dashboardResponse.data || {};
       
-      // Use backend-provided TES instance data directly and normalise fields
       const enhancedInstances = locations.map((loc, idx) => ({
         id: loc.id || `instance-${idx}`,
         name: loc.name || loc.tes_name || loc.url || `Instance ${idx + 1}`,
@@ -817,7 +810,6 @@ const NetworkTopology = () => {
         region: loc.region || 'Unknown',
         instanceType: loc.instanceType || 'compute',
         version: loc.version || 'unknown',
-        // Metrics coming directly or derived from backend
         taskCount: loc.taskCount != null ? loc.taskCount : (loc.tasks || 0),
         cpuUsage: loc.cpuUsage != null ? loc.cpuUsage : 0,
         memoryUsage: loc.memoryUsage != null ? loc.memoryUsage : 0,
@@ -828,7 +820,6 @@ const NetworkTopology = () => {
 
 setInstances(enhancedInstances);
       
-      // Process workflow paths from real dashboard data (no random simulation)
       const batchRuns = Array.isArray(dashboardData.batch_runs) ? dashboardData.batch_runs : [];
       const workflowRuns = Array.isArray(dashboardData.workflow_runs) ? dashboardData.workflow_runs : [];
 
@@ -854,7 +845,6 @@ setInstances(enhancedInstances);
       
       setWorkflowPaths(allWorkflows);
 
-      // Real-time stats derived only from live data
       const totalStorage = storageLocations.reduce((sum, storage) => {
         if (!storage.capacity) return sum;
         const capacityNum = parseFloat(String(storage.capacity).replace(/[^\d.]/g, '')) || 0;
@@ -879,25 +869,22 @@ setInstances(enhancedInstances);
     } finally {
       setLoading(false);
     }
-  }, []); // Only load once on mount, no dependencies to prevent re-renders
+  }, []); 
 
   useEffect(() => {
     loadNetworkTopology();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Load only once when component mounts
+  }, []);
 
-  // Optional real-time refresh; now opt-in via the toggle button
   useEffect(() => {
     if (!realTimePolling) return;
 
       const interval = setInterval(() => {
         loadNetworkTopology();
-      }, 15000); // 15 seconds
+      }, 15000); 
 
       return () => clearInterval(interval);
   }, [realTimePolling, loadNetworkTopology]);
 
-  // Generate simulated data transfers
   const generateDataTransfers = (instances, storage) => {
     const transfers = [];
     for (let i = 0; i < 5; i++) {
@@ -917,7 +904,6 @@ setInstances(enhancedInstances);
     return transfers;
   };
 
-  // Filter instances based on search and filters
   const filteredInstances = instances.filter(instance => {
     const matchesSearch = instance.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          instance.country.toLowerCase().includes(searchTerm.toLowerCase());
@@ -927,10 +913,8 @@ setInstances(enhancedInstances);
     return matchesSearch && matchesStatus && matchesRegion;
   });
 
-  // Get unique regions for filter
   const regions = [...new Set(instances.map(i => i.region))];
 
-  // Create custom Leaflet icons with enhanced styling
   const createTESIcon = (status, instanceType, isSelected = false) => {
     const color = status === 'healthy' ? '#38a169' : 
                   status === 'processing' ? '#ed8936' : '#e53e3e';
@@ -968,7 +952,6 @@ setInstances(enhancedInstances);
     });
   };
 
-  // Create storage icons
   const createStorageIcon = (storage) => {
     const usageColor = storage.usage > 80 ? '#e53e3e' : 
                       storage.usage > 60 ? '#ed8936' : '#38a169';
@@ -996,7 +979,6 @@ setInstances(enhancedInstances);
     });
   };
 
-// Enhanced styled components for filtering and search
 const FilterSection = styled.div`
   padding: 12px 16px;
   border-bottom: 1px solid #e2e8f0;
@@ -1216,7 +1198,6 @@ const WorkflowStep = styled.div`
   }
 `;
 
-// Enhanced map control components
 const MapControls = styled.div`
   position: absolute;
   top: 80px;
@@ -1333,7 +1314,6 @@ const ConnectionLine = styled.div`
   }
 `;
 
-  // Get workflow color based on type
   const getWorkflowColor = (type) => {
     switch (type) {
       case 'nextflow': return '#0055cc';
@@ -1343,14 +1323,12 @@ const ConnectionLine = styled.div`
     }
   };
 
-  // Format storage size for display
   const formatStorageSize = (size) => {
     const numericValue = parseFloat(size.replace(/[^\d.]/g, ''));
     const unit = size.replace(/[\d.]/g, '');
     return `${numericValue.toFixed(1)}${unit}`;
   };
 
-  // Calculate network health score
   const getNetworkHealthScore = () => {
     const healthyCount = instances.filter(i => i.status === 'healthy').length;
     const totalCount = instances.length;
@@ -1477,7 +1455,6 @@ const ConnectionLine = styled.div`
               />
               
               {instances.map((instance) => {
-                // Only show instances with valid coordinates (not 0,0 or null)
                 const hasValidCoords = instance.lat && instance.lng && 
                                       (instance.lat !== 0 || instance.lng !== 0);
                 if (!hasValidCoords) return null;
@@ -1536,7 +1513,6 @@ const ConnectionLine = styled.div`
                 );
               })}
 
-              {/* Storage locations */}
               {storageLocations.map((storage) => (
                 <Marker
                   key={storage.id}
@@ -1577,7 +1553,7 @@ const ConnectionLine = styled.div`
               {selectedWorkflow && (() => {
                 const workflow = workflowPaths.find(w => w.id === selectedWorkflow);
                 const sourceInstance = instances.find(i => i.name === workflow?.tes_name);
-                const targetInstance = instances[0]; // First instance as target
+                const targetInstance = instances[0]; 
                 
                 if (workflow && sourceInstance && targetInstance) {
                   return (
@@ -1597,7 +1573,6 @@ const ConnectionLine = styled.div`
               })()}
             </MapContainer>
           ) : (
-            // Topology view placeholder
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -1652,7 +1627,6 @@ const ConnectionLine = styled.div`
             </div>
           </SidebarHeader>
 
-          {/* Filter Section */}
           <FilterSection>
             <SearchInput
               type="text"
@@ -1832,7 +1806,6 @@ const ConnectionLine = styled.div`
                 )}
               </div>
             ) : (
-              // Metrics tab
               <div>
                 <MetricCard>
                   <div className="metric-header">

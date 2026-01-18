@@ -1,11 +1,8 @@
 import api from './api';
 
-// Service information API functions  
 export const serviceService = {
-  // Get service information
   getServiceInfo: async () => {
     try {
-      // Use dashboard data to get service info
       const response = await api.get('/api/dashboard_data');
       const dashboardData = response.data;
       
@@ -34,10 +31,8 @@ export const serviceService = {
     }
   },
 
-  // Get debug environment info
   getDebugEnv: async () => {
     try {
-      // Return debug environment info
       return {
         environment: process.env.NODE_ENV || 'development',
         apiUrl: process.env.REACT_APP_API_URL || '',
@@ -55,7 +50,6 @@ export const serviceService = {
     }
   },
 
-  // Get topology logs
   getTopologyLogs: async () => {
     try {
       const response = await api.get('/api/topology_logs');

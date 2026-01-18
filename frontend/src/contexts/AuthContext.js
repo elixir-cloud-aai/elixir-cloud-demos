@@ -15,27 +15,23 @@ export const AuthProvider = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Admin credentials (in production, this should be handled securely)
   const ADMIN_CREDENTIALS = {
     username: 'tesadmin',
     password: 'admin@dashboard'
   };
 
-  // Check if user is already logged in
   useEffect(() => {
     const authData = localStorage.getItem('tesAdminAuth');
     if (authData) {
       try {
         const { isAdmin: adminStatus, timestamp } = JSON.parse(authData);
-        // Check if session is still valid (24 hours)
-        const sessionDuration = 24 * 60 * 60 * 1000; // 24 hours
+        const sessionDuration = 24 * 60 * 60 * 1000; 
         const now = new Date().getTime();
         
         if (now - timestamp < sessionDuration && adminStatus) {
           setIsAuthenticated(true);
           setIsAdmin(true);
         } else {
-          // Session expired
           localStorage.removeItem('tesAdminAuth');
         }
       } catch (error) {
@@ -52,7 +48,6 @@ export const AuthProvider = ({ children }) => {
           setIsAuthenticated(true);
           setIsAdmin(true);
           
-          // Store auth state in localStorage
           const authData = {
             isAdmin: true,
             timestamp: new Date().getTime()
@@ -63,7 +58,7 @@ export const AuthProvider = ({ children }) => {
         } else {
           reject(new Error('Invalid credentials'));
         }
-      }, 500); // Simulate API delay
+      }, 500); 
     });
   };
 

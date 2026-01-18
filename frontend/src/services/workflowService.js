@@ -1,8 +1,6 @@
 import api from './api';
 
-// Workflow-related API functions
 export const workflowService = {
-  // Submit a workflow
   submitWorkflow: async (workflowData) => {
     try {
       const formData = new FormData();
@@ -26,11 +24,9 @@ export const workflowService = {
     }
   },
 
-  // Get workflow logs
   getWorkflowLogs: async (runId) => {
     try {
       const response = await api.get(`/api/workflow_log/${runId}`);
-      // Extract just the log content from the response
       if (response.data && response.data.success && response.data.log) {
         return response.data.log;
       } else if (response.data && response.data.log) {
@@ -44,7 +40,6 @@ export const workflowService = {
     }
   },
 
-  // Get latest workflow status
   getLatestWorkflowStatus: async () => {
     try {
       const response = await api.get('/api/latest_workflow_status');
@@ -55,7 +50,6 @@ export const workflowService = {
     }
   },
 
-  // Get workflow runs
   getWorkflowRuns: async () => {
     try {
       const response = await api.get('/api/dashboard_data');
@@ -63,13 +57,11 @@ export const workflowService = {
       
       const workflowRuns = dashboardData.workflow_runs || [];
       
-      // Filter out workflow runs from unhealthy or error-prone instances
       const healthyWorkflowRuns = workflowRuns.filter(run => {
         return run && 
                run.run_id && 
                run.tes_url &&
                run.status &&
-               // Filter out error states that indicate problematic instances
                !run.connection_error &&
                !run.timeout_error &&
                run.status !== 'CONNECTION_ERROR' &&
@@ -82,7 +74,6 @@ export const workflowService = {
     } catch (error) {
       console.error('Error fetching workflow runs:', error);
       
-      // Handle timeout and connectivity errors gracefully
       if (error.response?.status === 504 || error.response?.status === 503) {
         console.warn('External services timeout/unavailable, returning empty workflow runs');
         return [];

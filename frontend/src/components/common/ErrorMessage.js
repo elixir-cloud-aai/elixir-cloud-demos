@@ -84,7 +84,6 @@ const ErrorMessage = ({
 }) => {
   const displayMessage = message || (error && error.message) || 'An unexpected error occurred';
   
-  // Extract detailed error information
   let errorReason = null;
   let errorCode = null;
   let errorType = null;
@@ -106,7 +105,6 @@ const ErrorMessage = ({
     }
   }
   
-  // Build title with error code if available
   const displayTitle = errorCode ? `${title} ${errorCode ? `(${errorCode})` : ''}` : title;
   
   return (

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import instanceService from '../services/instanceService';
 
-// Simple hook for healthy TES instances
 const useInstances = () => {
   const [state, setState] = useState({
     instances: [],
@@ -11,25 +10,16 @@ const useInstances = () => {
   });
 
   useEffect(() => {
-    // Update state when service notifies of changes
     const handleUpdate = (newState) => {
       setState(newState);
     };
-
-    // Add listener to service
     instanceService.addListener(handleUpdate);
-
-    // Get initial state
     const initialState = instanceService.getHealthyInstances();
     setState(initialState);
-
-    // Cleanup listener on unmount
     return () => {
       instanceService.removeListener(handleUpdate);
     };
   }, []);
-
-  // Manual refresh function
   const refresh = () => {
     instanceService.refresh();
   };

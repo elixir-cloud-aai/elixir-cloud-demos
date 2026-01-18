@@ -1,102 +1,153 @@
-import api from './api';
+import { apiClient } from './api';
 
-// Log service for fetching various types of logs
 export const logService = {
-  // Get task logs (for individual tasks)
-  getTaskLogs: async (taskId) => {
+  getTaskLogs: async (taskId, tesUrl = null) => {
     try {
-      const response = await api.get(`/api/task_log/${taskId}`);
+      if (tesUrl) {
+        const response = await apiClient.get('/api/task_details', {
+          params: { 
+            task_id: taskId,
+            tes_url: tesUrl,
+            view: 'FULL'
+          }
+        });
+        
+        if (response.data.success && response.data.task_json) {
+          return {
+            success: true,
+            log: formatTaskLog(response.data.task_json),
+            task: response.data.task_json
+          };
+        }
+      }
+      
+      const response = await apiClient.get(`/api/task_log/${encodeURIComponent(taskId)}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching task logs:', error);
-      // Return empty logs if not found
-      return { logs: [], message: 'No logs available' };
+      return {
+        success: false,
+        log: `Error fetching logs: ${error.message}`
+      };
     }
   },
 
-  // Get workflow logs  
   getWorkflowLogs: async (runId) => {
     try {
-      const encodedRunId = encodeURIComponent(runId);
-      const response = await api.get(`/api/workflow_log/${encodedRunId}`);
-      return response.data;
+      const response = await apiClient.get(`/api/workflow_log/${encodeURIComponent(runId)}`);
+      return response.data.log || 'No workflow logs available';
     } catch (error) {
       console.error('Error fetching workflow logs:', error);
-      return { logs: [], message: 'No logs available' };
+      return `Error fetching workflow logs: ${error.message}`;
     }
   },
 
-  // Get batch logs
   getBatchLogs: async (runId) => {
     try {
-      const encodedRunId = encodeURIComponent(runId);
-      const response = await api.get(`/api/batch_log/${encodedRunId}`);
-      return response.data;
+      const response = await apiClient.get(`/api/batch_log/${encodeURIComponent(runId)}`);
+      return response.data.log || 'No batch logs available';
     } catch (error) {
       console.error('Error fetching batch logs:', error);
-      return { logs: [], message: 'No logs available' };
+      return `Error fetching batch logs: ${error.message}`;
     }
   },
 
-  // Get topology logs
   getTopologyLogs: async () => {
     try {
-      const response = await api.get('/api/topology_logs');
-      return response.data;
+      const response = await apiClient.get('/api/topology_logs');
+      return response.data.logs || [];
     } catch (error) {
       console.error('Error fetching topology logs:', error);
-      return { logs: [], message: 'No topology logs available' };
-    }
-  },
-
-  // Get all logs (combined)
-  getAllLogs: async () => {
-    try {
-      // Fetch dashboard data to get available runs
-      const dashboardResponse = await api.get('/api/dashboard_data');
-      const dashboardData = dashboardResponse.data;
-      
-      const allLogs = [];
-      
-      // Add batch logs
-      if (dashboardData.batch_runs) {
-        for (const run of dashboardData.batch_runs) {
-          try {
-            const logs = await logService.getBatchLogs(run.run_id);
-            allLogs.push({
-              type: 'batch',
-              runId: run.run_id,
-              name: `${run.workflow_type} - ${run.tes_name}`,
-              timestamp: run.submitted_at,
-              logs: logs.logs || []
-            });
-          } catch (error) {
-            console.log(`No logs for batch run ${run.run_id}`);
-          }
-        }
-      }
-      
-      // Add topology logs
-      try {
-        const topologyLogs = await logService.getTopologyLogs();
-        if (topologyLogs.logs && topologyLogs.logs.length > 0) {
-          allLogs.push({
-            type: 'topology',
-            name: 'Network Topology',
-            timestamp: new Date().toISOString(),
-            logs: topologyLogs.logs
-          });
-        }
-      } catch (error) {
-        console.log('No topology logs available');
-      }
-      
-      return allLogs;
-    } catch (error) {
-      console.error('Error fetching all logs:', error);
       return [];
     }
   }
 };
+
+function formatTaskLog(taskJson) {
+  let logContent = `=== Task Execution Log ===
+Task ID: ${taskJson.id}
+Task Name: ${taskJson.name || 'Unknown'}
+State: ${taskJson.state}
+Created: ${taskJson.creation_time || 'Unknown'}
+
+`;
+
+  if (taskJson.executors && taskJson.executors.length > 0) {
+    logContent += `=== Executor Configuration ===\n`;
+    taskJson.executors.forEach((executor, idx) => {
+      logContent += `\nExecutor ${idx + 1}:
+  Image: ${executor.image}
+  Command: ${Array.isArray(executor.command) ? executor.command.join(' ') : executor.command}
+  Working Directory: ${executor.workdir || 'N/A'}
+`;
+    });
+    logContent += '\n';
+  }
+
+  if (taskJson.logs && taskJson.logs.length > 0) {
+    logContent += `=== Execution Logs ===\n\n`;
+    
+    taskJson.logs.forEach((logEntry, logIdx) => {
+      logContent += `Log Entry ${logIdx + 1}:
+  Start Time: ${logEntry.start_time || 'N/A'}
+  End Time: ${logEntry.end_time || 'N/A'}
+`;
+
+      if (logEntry.metadata && Object.keys(logEntry.metadata).length > 0) {
+        logContent += `  Metadata:\n`;
+        Object.entries(logEntry.metadata).forEach(([key, value]) => {
+          logContent += `    ${key}: ${value}\n`;
+        });
+      }
+
+      if (logEntry.logs && logEntry.logs.length > 0) {
+        logEntry.logs.forEach((execLog, execIdx) => {
+          logContent += `\n  === Executor ${execIdx + 1} Output ===\n`;
+          logContent += `  Start: ${execLog.start_time || 'N/A'}\n`;
+          logContent += `  End: ${execLog.end_time || 'N/A'}\n`;
+          logContent += `  Exit Code: ${execLog.exit_code !== undefined ? execLog.exit_code : 'N/A'}\n`;
+          
+          if (execLog.stdout) {
+            logContent += `\n  --- STDOUT ---\n${execLog.stdout}\n`;
+          }
+          
+          if (execLog.stderr) {
+            logContent += `\n  --- STDERR ---\n${execLog.stderr}\n`;
+          }
+        });
+      }
+      
+      logContent += '\n';
+    });
+  } else {
+    logContent += `=== No Execution Logs Available ===
+The task may still be running or logs were not captured.
+`;
+  }
+
+  if (taskJson.resources) {
+    logContent += `\n=== Resource Configuration ===
+CPU Cores: ${taskJson.resources.cpu_cores || 'N/A'}
+RAM (GB): ${taskJson.resources.ram_gb || 'N/A'}
+Disk (GB): ${taskJson.resources.disk_gb || 'N/A'}
+`;
+  }
+
+  if (taskJson.inputs && taskJson.inputs.length > 0) {
+    logContent += `\n=== Inputs ===\n`;
+    taskJson.inputs.forEach((input, idx) => {
+      logContent += `Input ${idx + 1}: ${input.url || input.path}\n`;
+    });
+  }
+
+  if (taskJson.outputs && taskJson.outputs.length > 0) {
+    logContent += `\n=== Outputs ===\n`;
+    taskJson.outputs.forEach((output, idx) => {
+      logContent += `Output ${idx + 1}: ${output.url || output.path}\n`;
+    });
+  }
+
+  return logContent;
+}
 
 export default logService;

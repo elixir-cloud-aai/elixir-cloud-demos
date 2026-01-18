@@ -8,21 +8,17 @@ class InstanceService {
     this.lastUpdate = null;
     this.listeners = new Set();
     
-    // Start health checking every 5 seconds
     this.startHealthChecking();
   }
 
-  // Add listener for instance updates
   addListener(callback) {
     this.listeners.add(callback);
   }
 
-  // Remove listener
   removeListener(callback) {
     this.listeners.delete(callback);
   }
 
-  // Notify all listeners
   notifyListeners() {
     this.listeners.forEach(callback => {
       try {
@@ -38,7 +34,6 @@ class InstanceService {
     });
   }
 
-  // Get current healthy instances
   getHealthyInstances() {
     return {
       instances: this.healthyInstances,
@@ -48,10 +43,8 @@ class InstanceService {
     };
   }
 
-  // Fetch healthy instances from backend - no loading states!
   async fetchHealthyInstances() {
     try {
-      // Don't show loading for subsequent requests - only log
       const isInitialLoad = this.healthyInstances.length === 0;
       
       if (isInitialLoad) {
@@ -63,10 +56,9 @@ class InstanceService {
       }
       
       const response = await api.get('/api/healthy-instances', {
-        timeout: 5000 // Fast 5 second timeout since backend returns cached data
+        timeout: 5000
       });
 
-      // Handle new API response format
       const data = response.data;
       this.healthyInstances = data.instances || [];
       this.lastUpdate = data.last_updated ? new Date(data.last_updated) : new Date();
@@ -77,7 +69,6 @@ class InstanceService {
     } catch (err) {
       console.error('Error fetching healthy instances:', err);
       
-      // More specific error handling
       if (err.code === 'ECONNABORTED') {
         this.error = 'Connection timeout - using cached data';
         console.warn('Connection timed out, keeping existing instances');
@@ -87,29 +78,24 @@ class InstanceService {
         this.error = err.response?.data?.error || err.message || 'Failed to fetch instances';
       }
       
-      // Always keep previous data if available
       if (this.healthyInstances.length === 0) {
         console.warn('No cached instances available');
       } else {
         console.log(`Using ${this.healthyInstances.length} cached healthy instances during error`);
       }
     } finally {
-      // Only show loading on initial load
       if (this.healthyInstances.length === 0) {
         this.loading = false;
       } else {
-        this.loading = false; // Always false after we have data
+        this.loading = false;
       }
       this.notifyListeners();
     }
   }
 
-  // Start periodic health checking
   startHealthChecking() {
-    // Initial fetch
     this.fetchHealthyInstances();
     
-    // Set up interval for every 60 seconds (backend updates every 30s)
     this.healthCheckInterval = setInterval(() => {
       this.fetchHealthyInstances();
     }, 60000);
@@ -117,7 +103,6 @@ class InstanceService {
     console.log('🔄 Started cache refresh every 60 seconds');
   }
 
-  // Stop health checking
   stopHealthChecking() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
@@ -126,14 +111,12 @@ class InstanceService {
     }
   }
 
-  // Force refresh instances
   async refresh() {
     console.log('🔄 Force refreshing healthy instances...');
     await this.fetchHealthyInstances();
   }
 }
 
-// Create singleton instance
 const instanceService = new InstanceService();
 
 export default instanceService;

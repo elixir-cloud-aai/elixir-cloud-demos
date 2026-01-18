@@ -188,37 +188,30 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  
-  // Settings state
-  const [settings, setSettings] = useState({
-    // User preferences
+   
+  const [settings, setSettings] = useState({ 
     username: localStorage.getItem('username') || '',
     email: localStorage.getItem('email') || '',
-    
-    // TES Configuration
+     
     defaultTesInstance: localStorage.getItem('defaultTesInstance') || '',
     tesToken: localStorage.getItem('tesToken') || '',
     tesUsername: localStorage.getItem('tesUsername') || '',
     tesPassword: localStorage.getItem('tesPassword') || '',
-    
-    // Dashboard preferences
+     
     refreshInterval: parseInt(localStorage.getItem('refreshInterval')) || 30,
     theme: localStorage.getItem('theme') || 'light',
     primaryColor: localStorage.getItem('primaryColor') || '#2563eb',
-    
-    // Notifications
+     
     enableNotifications: localStorage.getItem('enableNotifications') === 'true',
     notifyOnTaskComplete: localStorage.getItem('notifyOnTaskComplete') === 'true',
     notifyOnWorkflowComplete: localStorage.getItem('notifyOnWorkflowComplete') === 'true',
     notifyOnErrors: localStorage.getItem('notifyOnErrors') === 'true',
-    
-    // Advanced settings
+     
     maxLogLines: parseInt(localStorage.getItem('maxLogLines')) || 1000,
     autoRefreshLogs: localStorage.getItem('autoRefreshLogs') === 'true',
     debugMode: localStorage.getItem('debugMode') === 'true',
     retainLogs: localStorage.getItem('retainLogs') === 'true',
-    
-    // API Configuration
+     
     apiTimeout: parseInt(localStorage.getItem('apiTimeout')) || 30,
     maxRetries: parseInt(localStorage.getItem('maxRetries')) || 3,
     customHeaders: localStorage.getItem('customHeaders') || ''
@@ -236,20 +229,17 @@ const Settings = () => {
       setLoading(true);
       setError('');
       setSuccessMessage('');
-
-      // Save to localStorage
+ 
       Object.entries(settings).forEach(([key, value]) => {
         localStorage.setItem(key, value.toString());
       });
-
-      // Apply theme changes
+ 
       if (settings.primaryColor) {
         document.documentElement.style.setProperty('--primary-color', settings.primaryColor);
       }
 
       setSuccessMessage('Settings saved successfully!');
-      
-      // Clear success message after 3 seconds
+       
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setError('Failed to save settings: ' + err.message);
@@ -260,12 +250,11 @@ const Settings = () => {
 
   const handleReset = () => {
     if (window.confirm('Are you sure you want to reset all settings to default values?')) {
-      // Clear localStorage
+
       Object.keys(settings).forEach(key => {
         localStorage.removeItem(key);
       });
-
-      // Reset to default values
+ 
       setSettings({
         username: '',
         email: '',
@@ -294,8 +283,7 @@ const Settings = () => {
     }
   };
 
-  useEffect(() => {
-    // Apply saved theme on component mount
+  useEffect(() => { 
     if (settings.primaryColor) {
       document.documentElement.style.setProperty('--primary-color', settings.primaryColor);
     }

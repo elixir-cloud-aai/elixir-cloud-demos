@@ -310,7 +310,6 @@ const AdminLogin = ({ onBack }) => {
 
     try {
       await login(formData.username, formData.password);
-      // Successful login will be handled by the AuthContext
     } catch (err) {
       setError(err.message);
     } finally {
@@ -321,7 +320,7 @@ const AdminLogin = ({ onBack }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    setError(''); // Clear error when user types
+    setError('');  
   };
 
   return (

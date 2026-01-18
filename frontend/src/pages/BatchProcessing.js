@@ -363,16 +363,13 @@ const BatchProcessing = () => {
   const [batchRuns, setBatchRuns] = useState([]);
   const [runsLoading, setRunsLoading] = useState(true);
   
-  // Use simple instances hook
   const { instances = [], loading: instancesLoading, error: instancesError, refresh: refreshInstances } = useInstances();
 
-  // Log modal state
   const [showLogModal, setShowLogModal] = useState(false);
   const [currentLog, setCurrentLog] = useState('');
   const [currentLogRunId, setCurrentLogRunId] = useState('');
   const [logLoading, setLogLoading] = useState(false);
 
-  // Refs for file inputs
   const snakefileRef = useRef(null);
   const smkDirRef = useRef(null);
   const nextflowFileRef = useRef(null);
@@ -380,7 +377,6 @@ const BatchProcessing = () => {
   const cwlFileRef = useRef(null);
   const cwlInputsRef = useRef(null);
 
-  // Form states
   const [snakemakeForm, setSnakemakeForm] = useState({
     batchMode: 'all',
     snakefile: null,
@@ -400,7 +396,6 @@ const BatchProcessing = () => {
     inputsFile: null
   });
 
-  // Load batch runs
   useEffect(() => {
     loadBatchRuns();
   }, []);
@@ -412,12 +407,10 @@ const BatchProcessing = () => {
       setBatchRuns(runs);
     } catch (err) {
       console.error('Error loading batch runs:', err);
-      // Don't show errors for timeout/connectivity issues - just continue with empty data
       if (err.response?.status === 504 || err.response?.status === 503 || err.message?.includes('timeout')) {
         console.warn('External services slow/unavailable - showing empty batch runs');
         setBatchRuns([]);
       } else {
-        // Only set error for critical issues
         console.error('Critical batch loading error:', err);
       }
     } finally {
@@ -430,7 +423,7 @@ const BatchProcessing = () => {
       console.log('Opening batch logs modal for run:', runId);
       setLogLoading(true);
       setCurrentLogRunId(runId);
-      setCurrentLog(''); // Clear previous logs
+      setCurrentLog(''); 
       setShowLogModal(true);
       
       console.log('Fetching batch logs...');

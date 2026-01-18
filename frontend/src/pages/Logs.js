@@ -217,7 +217,6 @@ const Logs = () => {
   const [logType, setLogType] = useState('all');
   const [expandedLogs, setExpandedLogs] = useState(new Set());
 
-  // Check URL parameters for pre-selection
   useEffect(() => {
     const typeParam = searchParams.get('type');
     const taskIdParam = searchParams.get('taskId');
@@ -240,119 +239,112 @@ const Logs = () => {
   }, [logs, searchTerm, logType]);
 
   const loadLogs = async () => {
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    setError('');
 
-      const allLogs = [];
-      
-      // Check if we have a specific task ID from URL parameters
-      const taskIdParam = searchParams.get('taskId');
-      
-      if (taskIdParam) {
-        // Load only the specific task log
-        try {
-          console.log('Loading log for specific task:', taskIdParam);
-          const logResponse = await logService.getTaskLogs(taskIdParam);
-          
-          if (logResponse && logResponse.success) {
-            allLogs.push({
-              id: taskIdParam,
-              type: 'task',
-              title: `Task ${taskIdParam}`,
-              content: logResponse.log || 'No log content available',
-              timestamp: new Date().toISOString(),
-              metadata: {
-                status: logResponse.task?.status || 'Unknown',
-                tesInstance: logResponse.task?.tes_name || 'Unknown'
-              }
-            });
-          } else {
-            allLogs.push({
-              id: taskIdParam,
-              type: 'task',
-              title: `Task ${taskIdParam}`,
-              content: 'Task log not found or no log content available',
-              timestamp: new Date().toISOString(),
-              metadata: {
-                status: 'Unknown',
-                tesInstance: 'Unknown'
-              }
-            });
-          }
-        } catch (err) {
-          console.error('Error loading specific task log:', err);
+    const allLogs = [];
+    
+    const taskIdParam = searchParams.get('taskId');
+    const tesUrlParam = searchParams.get('tesUrl');
+    
+    if (taskIdParam) {
+      try {
+        console.log('Loading log for specific task:', taskIdParam, 'from:', tesUrlParam);
+        const logResponse = await logService.getTaskLogs(taskIdParam, tesUrlParam);
+        
+        if (logResponse && logResponse.success) {
+          allLogs.push({
+            id: taskIdParam,
+            type: 'task',
+            title: `Task ${logResponse.task?.name || taskIdParam}`,
+            content: logResponse.log || 'No log content available',
+            timestamp: logResponse.task?.creation_time || new Date().toISOString(),
+            metadata: {
+              status: logResponse.task?.state || 'Unknown',
+              tesInstance: tesUrlParam || 'Unknown'
+            }
+          });
+        } else {
           allLogs.push({
             id: taskIdParam,
             type: 'task',
             title: `Task ${taskIdParam}`,
-            content: `Failed to load log: ${err.message}`,
+            content: logResponse?.log || 'Task log not found or no log content available',
             timestamp: new Date().toISOString(),
             metadata: {
-              status: 'Error',
-              tesInstance: 'Unknown'
+              status: 'Unknown',
+              tesInstance: tesUrlParam || 'Unknown'
             }
           });
         }
-      } else {
-        // Load all recent logs (existing behavior)
-        const dashboardData = await taskService.getDashboardData();
+      } catch (err) {
+        console.error('Error loading specific task log:', err);
+        allLogs.push({
+          id: taskIdParam,
+          type: 'task',
+          title: `Task ${taskIdParam}`,
+          content: `Failed to load log: ${err.message}`,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            status: 'Error',
+            tesInstance: tesUrlParam || 'Unknown'
+          }
+        });
+      }
+    } else {
+      const dashboardData = await taskService.getDashboardData();
 
-        
-        console.log('Dashboard data for logs:', dashboardData);
-        console.log('Submitted tasks found:', dashboardData.submitted_tasks?.length || 0);
+      console.log('Dashboard data for logs:', dashboardData);
+      console.log('Submitted tasks found:', dashboardData.submitted_tasks?.length || 0);
 
-        // Add task logs
-        if (Array.isArray(dashboardData.submitted_tasks)) {
-          for (const task of dashboardData.submitted_tasks.slice(-10)) { // Latest 10 tasks
-            try {
-              console.log('Loading log for task:', task.task_id, 'from:', task.tes_name);
-              const logResponse = await logService.getTaskLogs(task.task_id);
-              let content = 'No log content available';
-              
-              console.log('Task log response:', logResponse);
-              
-              if (logResponse && logResponse.success) {
-                content = logResponse.log || 'Log endpoint returned success but no log content';
-              } else if (logResponse && logResponse.message) {
-                content = logResponse.message;
-              } else {
-                // Fallback: create a basic log entry even if backend endpoint isn't working
-                content = `Task Log for ${task.task_id}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: Full log details not available (backend may still be updating)`;
-              }
-              
-              allLogs.push({
-                id: task.task_id,
-                type: 'task',
-                title: `Task ${task.task_id} (${task.tes_name})`,
-                content: content,
-                timestamp: task.submitted_at || new Date().toISOString(),
-                metadata: {
-                  status: task.status,
-                  tesInstance: task.tes_name || 'Unknown'
-                }
-              });
-            } catch (err) {
-              console.error('Error loading task log for', task.task_id, ':', err);
-              // Still add the task to the logs list with error info and basic task details
-              allLogs.push({
-                id: task.task_id,
-                type: 'task',
-                title: `Task ${task.task_id} (${task.tes_name})`,
-                content: `Task Log for ${task.task_id}\n\nError: ${err.message}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: This task exists but logs couldn't be fetched from the backend.`,
-                timestamp: task.submitted_at || new Date().toISOString(),
-                metadata: {
-                  status: task.status,
-                  tesInstance: task.tes_name || 'Unknown'
-                }
-              });
+      if (Array.isArray(dashboardData.submitted_tasks)) {
+        for (const task of dashboardData.submitted_tasks.slice(-10)) { 
+          try {
+            console.log('Loading log for task:', task.task_id, 'from:', task.tes_url);
+            const logResponse = await logService.getTaskLogs(task.task_id, task.tes_url);
+            let content = 'No log content available';
+            
+            console.log('Task log response:', logResponse);
+            
+            if (logResponse && logResponse.success) {
+              content = logResponse.log || 'Log endpoint returned success but no log content';
+            } else if (logResponse && logResponse.log) {
+              content = logResponse.log;
+            } else {
+              content = `Task Log for ${task.task_id}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: Full log details not available (task may still be running)`;
             }
+            
+            allLogs.push({
+              id: task.task_id,
+              type: 'task',
+              title: `Task ${task.task_id} (${task.tes_name})`,
+              content: content,
+              timestamp: task.submitted_at || new Date().toISOString(),
+              metadata: {
+                status: task.status,
+                tesInstance: task.tes_name || 'Unknown'
+              }
+            });
+          } catch (err) {
+            console.error('Error loading task log for', task.task_id, ':', err);
+            allLogs.push({
+              id: task.task_id,
+              type: 'task',
+              title: `Task ${task.task_id} (${task.tes_name})`,
+              content: `Task Log for ${task.task_id}\n\nError: ${err.message}\n\nTask Details:\n- Status: ${task.status}\n- TES Instance: ${task.tes_name}\n- Submitted: ${task.submitted_at}\n- Type: ${task.type || 'Unknown'}\n\nNote: This task exists but logs couldn't be fetched.`,
+              timestamp: task.submitted_at || new Date().toISOString(),
+              metadata: {
+                status: task.status,
+                tesInstance: task.tes_name || 'Unknown'
+              }
+            });
           }
         }
+      }
 
-        // Add workflow logs
         if (Array.isArray(dashboardData.workflow_runs)) {
-        for (const workflow of dashboardData.workflow_runs.slice(-10)) { // Latest 10 workflows
+        for (const workflow of dashboardData.workflow_runs.slice(-10)) { 
           try {
             const logContent = await logService.getWorkflowLogs(workflow.run_id);
             allLogs.push({
@@ -384,10 +376,9 @@ const Logs = () => {
         }
         }
 
-        // Add batch logs
         try {
         const batchRuns = await batchService.getBatchRuns();
-        for (const batch of batchRuns.slice(-10)) { // Latest 10 batch runs
+        for (const batch of batchRuns.slice(-10)) { 
           try {
             const logContent = await logService.getBatchLogs(batch.run_id);
             allLogs.push({
@@ -424,7 +415,6 @@ const Logs = () => {
         }
       }
 
-      // Get topology logs
       try {
         const topologyLogs = await logService.getTopologyLogs();
         if (Array.isArray(topologyLogs)) {
@@ -445,8 +435,7 @@ const Logs = () => {
         console.error('Failed to load topology logs:', err);
       }
 
-      // Sort logs by timestamp (newest first)
-      allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       
       setLogs(allLogs);
     } catch (err) {
@@ -459,12 +448,10 @@ const Logs = () => {
   const filterLogs = () => {
     let filtered = logs;
 
-    // Filter by type
     if (logType !== 'all') {
       filtered = filtered.filter(log => log.type === logType);
     }
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(log =>
         log.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

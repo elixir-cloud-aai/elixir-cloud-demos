@@ -227,33 +227,26 @@ const SystemStatus = () => {
   const [instancesStatus, setInstancesStatus] = useState([]);
   const [taskStats, setTaskStats] = useState({});
   const [lastUpdated, setLastUpdated] = useState(null);
-
-  // Poll for updates every 30 seconds
+ 
   const refreshData = async () => {
     try {
       setLoading(true);
       setError('');
-
-      // Get dashboard data for overall stats
-      const dashboardData = await taskService.getDashboardData();
-      
-      // Get service status data from our new service
+ 
+      const dashboardData = await taskService.getDashboardData(); 
       const response = await api.get('/api/service_status');
       const statusData = response.data;
-      
-      // Map the service status data to the expected format
+       
       const instanceResults = statusData.services.map(service => ({
         name: service.name,
         url: service.url,
         status: service.status === 'online' ? 'healthy' : 'error',
-        taskCount: 0, // We don't have task count from service status
+        taskCount: 0,  
         lastChecked: service.last_checked,
         error: service.details?.error || null
       }));
 
-      setInstancesStatus(instanceResults);
-
-      // Calculate system health
+      setInstancesStatus(instanceResults); 
       const healthyInstances = instanceResults.filter(i => i.status === 'healthy').length;
       const totalInstances = instanceResults.length;
       const healthPercentage = totalInstances > 0 ? (healthyInstances / totalInstances) * 100 : 0;
@@ -264,8 +257,7 @@ const SystemStatus = () => {
         totalInstances,
         healthPercentage: healthPercentage.toFixed(1)
       });
-
-      // Set task statistics
+ 
       if (dashboardData) {
         const taskCounts = {};
         if (Array.isArray(dashboardData.submitted_tasks)) {
@@ -292,7 +284,7 @@ const SystemStatus = () => {
     }
   };
 
-  usePolling(refreshData, 30000); // Poll every 30 seconds
+  usePolling(refreshData, 30000);  
 
   useEffect(() => {
     refreshData();

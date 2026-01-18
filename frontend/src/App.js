@@ -17,9 +17,9 @@ import NetworkTopology from './pages/NetworkTopology';
 import NodeManagement from './pages/NodeManagement';
 import Utilities from './pages/Utilities';
 import ApiTest from './pages/ApiTest';
-import MiddlewareManager from './pages/MiddlewareManager';
 import Settings from './pages/Settings';
 import { testConnection } from './services/api';
+import MiddlewareManager from './components/MiddlewareManager';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -39,7 +39,6 @@ function App() {
   const [connectionStatus, setConnectionStatus] = useState('Checking...');
   const [isConnected, setIsConnected] = useState(false);
 
-  // Check connection on app load
   useEffect(() => {
     const checkConnection = async () => {
       try {
