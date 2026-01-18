@@ -74,7 +74,7 @@ class MiddlewareConfigManager:
                 'enabled': True,
                 'priority': 10,
                 'config': {
-                    'require_auth': False,  # Set to True for production
+                    'require_auth': False,  
                     'valid_tokens': {
                         'test_token_123': {
                             'user_id': 'test_user',
@@ -248,21 +248,19 @@ def setup_default_middleware(manager: MiddlewareManager, config_file: str = None
             print(f"❌ Failed to register middleware {config_dict.get('name', 'unknown')}: {str(e)}")
     
     return manager
-
-# Test configuration for easy testing
+ 
 def get_test_configurations() -> List[Dict[str, Any]]:
     """Get test-friendly middleware configurations"""
     configs = MiddlewareConfigManager().default_configs.copy()
-    
-    # Modify for testing
+     
     for config in configs:
         if config['name'] == 'authentication':
-            config['config']['require_auth'] = False  # Disable auth for testing
+            config['config']['require_auth'] = False 
         elif config['name'] == 'rate_limiting':
-            config['config']['global_limit'] = 10000  # Higher limits for testing
-            config['config']['window_size_minutes'] = 1  # Shorter window
+            config['config']['global_limit'] = 10000 
+            config['config']['window_size_minutes'] = 1 
         elif config['name'] == 'validation':
-            config['config']['strict_mode'] = False  # Non-strict for testing
+            config['config']['strict_mode'] = False 
     
     return configs
 

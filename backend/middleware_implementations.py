@@ -31,8 +31,7 @@ class AuthenticationMiddleware(BaseMiddleware):
         try:
             request_data = context.get('request_data', {})
             headers = request_data.get('headers', {})
-            
-            # Extract token from Authorization header
+             
             auth_header = headers.get('authorization', '')
             token = None
             
@@ -58,8 +57,7 @@ class AuthenticationMiddleware(BaseMiddleware):
                     execution_time_ms=0,
                     message="No authentication token provided"
                 )
-            
-            # Validate token
+             
             user_info = self.valid_tokens.get(token)
             if user_info:
                 context['user_info'] = {
@@ -118,21 +116,18 @@ class AuthorizationMiddleware(BaseMiddleware):
             method = request_data.get('method', 'GET')
             user_roles = user_info.get('roles', [])
             user_permissions = user_info.get('permissions', [])
-            
-            # Check endpoint-specific permissions
+             
             endpoint_key = f"{method}:{endpoint}"
             required_permissions = self.endpoint_permissions.get(endpoint_key, [])
             
-            if not required_permissions:
-                # No specific permissions required
+            if not required_permissions: 
                 return MiddlewareResult(
                     middleware_name=self.name,
                     status=MiddlewareStatus.SUCCESS,
                     execution_time_ms=0,
                     message="No specific permissions required for this endpoint"
                 )
-            
-            # Check if user has required permissions (either directly or through roles)
+             
             effective_permissions = set(user_permissions)
             for role in user_roles:
                 role_perms = self.role_permissions.get(role, [])
@@ -181,20 +176,16 @@ class RateLimitingMiddleware(BaseMiddleware):
             
             current_time = datetime.now()
             window_start = current_time - timedelta(minutes=self.window_size)
-            
-            # Determine rate limit key (user, IP, or global)
+             
             user_id = user_info.get('user_id', 'anonymous')
             client_ip = request_data.get('client_ip', 'unknown')
             
             rate_limit_key = user_id if user_id != 'anonymous' else client_ip
-            
-            # Clean old entries
+             
             self._clean_old_entries(window_start)
-            
-            # Get current request count
+             
             current_requests = len(self.request_counts[rate_limit_key]['requests'])
-            
-            # Check user-specific rate limit
+             
             user_limit = self.rate_limits.get(user_id, self.global_limit)
             
             if current_requests >= user_limit:
@@ -204,8 +195,7 @@ class RateLimitingMiddleware(BaseMiddleware):
                     execution_time_ms=0,
                     message=f"Rate limit exceeded: {current_requests}/{user_limit} requests in {self.window_size} minutes"
                 )
-            
-            # Record this request
+             
             self.request_counts[rate_limit_key]['requests'].append(current_time)
             
             return MiddlewareResult(
@@ -259,18 +249,14 @@ class LoggingMiddleware(BaseMiddleware):
                 if self.log_sensitive_data:
                     log_entry['request_headers'] = request_data.get('headers', {})
                     log_entry['request_body'] = request_data.get('body', {})
-                else:
-                    # Filter out sensitive headers
+                else: 
                     safe_headers = {
                         k: v for k, v in request_data.get('headers', {}).items()
                         if k.lower() not in ['authorization', 'x-api-key', 'cookie']
                     }
                     log_entry['request_headers'] = safe_headers
-            
-            # Store log entry in context for potential response logging
-            context['log_entry'] = log_entry
-            
-            # Log the entry
+             
+            context['log_entry'] = log_entry 
             self.logger.info(f"Request logged: {json.dumps(log_entry, indent=2)}")
             
             return MiddlewareResult(
@@ -317,14 +303,12 @@ class ValidationMiddleware(BaseMiddleware):
             errors = []
             body = request_data.get('body', {})
             headers = request_data.get('headers', {})
-            
-            # Validate required fields
+             
             required_fields = rules.get('required_fields', [])
             for field in required_fields:
                 if field not in body:
                     errors.append(f"Required field '{field}' is missing")
-            
-            # Validate field types
+             
             field_types = rules.get('field_types', {})
             for field, expected_type in field_types.items():
                 if field in body:
@@ -335,15 +319,13 @@ class ValidationMiddleware(BaseMiddleware):
                         errors.append(f"Field '{field}' must be an integer")
                     elif expected_type == 'array' and not isinstance(actual_value, list):
                         errors.append(f"Field '{field}' must be an array")
-            
-            # Validate field patterns (regex)
+             
             field_patterns = rules.get('field_patterns', {})
             for field, pattern in field_patterns.items():
                 if field in body and isinstance(body[field], str):
                     if not re.match(pattern, body[field]):
                         errors.append(f"Field '{field}' does not match required pattern")
-            
-            # Validate required headers
+             
             required_headers = rules.get('required_headers', [])
             for header in required_headers:
                 if header.lower() not in {k.lower(): k for k in headers.keys()}:
@@ -398,8 +380,7 @@ class CachingMiddleware(BaseMiddleware):
                     execution_time_ms=0,
                     message=f"Method {method} is not cacheable"
                 )
-            
-            # Check if endpoint matches cache patterns
+             
             should_cache = any(re.match(pattern, endpoint) for pattern in self.cache_patterns)
             if not should_cache and self.cache_patterns:
                 return MiddlewareResult(
@@ -408,11 +389,9 @@ class CachingMiddleware(BaseMiddleware):
                     execution_time_ms=0,
                     message="Endpoint does not match cache patterns"
                 )
-            
-            # Generate cache key
+             
             cache_key = self._generate_cache_key(request_data)
-            
-            # Check if we have a cached response
+             
             if cache_key in self.cache:
                 cached_entry = self.cache[cache_key]
                 if time.time() - cached_entry['timestamp'] < self.cache_ttl:
@@ -424,11 +403,9 @@ class CachingMiddleware(BaseMiddleware):
                         message="Cache hit - returning cached response",
                         data={'cache_key': cache_key, 'cached': True}
                     )
-                else:
-                    # Cache expired, remove it
+                else: 
                     del self.cache[cache_key]
-            
-            # Mark for caching after response is generated
+             
             context['cache_key'] = cache_key
             context['should_cache'] = True
             
@@ -482,13 +459,11 @@ class MonitoringMiddleware(BaseMiddleware):
             endpoint = request_data.get('endpoint', '')
             method = request_data.get('method', 'GET')
             user_id = user_info.get('user_id', 'anonymous')
-            
-            # Track request metrics
+             
             metric_key = f"{method}:{endpoint}"
             self.metrics[metric_key]['total_requests'] += 1
             self.metrics[metric_key]['requests_by_user'][user_id] += 1
-            
-            # Store start time for response time calculation
+             
             context['monitoring_start_time'] = time.time()
             context['monitoring_endpoint'] = metric_key
             

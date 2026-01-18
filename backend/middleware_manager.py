@@ -15,8 +15,7 @@ import logging
 from datetime import datetime
 import asyncio
 from flask import request, jsonify, g
-
-# Setup logging
+ 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -160,8 +159,7 @@ class MiddlewareManager:
                     
                     results.append(result)
                     context.middleware_results.append(result)
-                    
-                    # Update metrics
+                     
                     if middleware.name not in self.metrics['middleware_executions']:
                         self.metrics['middleware_executions'][middleware.name] = {
                             'count': 0,
@@ -246,6 +244,5 @@ class MiddlewareManager:
             'middleware_executions': {},
             'average_execution_time': 0.0
         }
-
-# Global middleware manager instance
+ 
 middleware_manager = MiddlewareManager()
