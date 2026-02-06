@@ -1,14 +1,108 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime, timezone
 import uuid
 import json
 import time
 import requests
+import shlex
+import logging
 from services.task_service import get_submitted_tasks, add_task, update_single_task_status
 from utils.tes_utils import load_tes_instances
 from utils.auth_utils import get_instance_credentials
+import logging
+
+logger = logging.getLogger(__name__)
 
 tasks_bp = Blueprint('tasks', __name__)
+
+def build_failed_task(tes_task, tes_url, tes_name, tes_endpoint=None, 
+                      error_message=None, error_type=None, error_code=None, 
+                      error_reason=None, http_status_code=None):
+    """
+    Construct a standardized failed task dictionary.
+    
+    Args:
+        tes_task: The TES task specification dict
+        tes_url: TES instance URL
+        tes_name: TES instance name
+        tes_endpoint: Optional TES endpoint used (if reached that stage)
+        error_message: Human-readable error description
+        error_type: Category of error (e.g., 'connection_error', 'bad_request')
+        error_code: Machine-readable error code
+        error_reason: Detailed reason for the error
+        http_status_code: HTTP status code if applicable
+        
+    Returns:
+        Dict containing failed task with SUBMISSION_FAILED state
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    failed_task = {
+        'id': str(uuid.uuid4()),
+        'task_id': 'N/A',
+        'name': tes_task['name'],
+        'task_name': tes_task['name'],
+        'description': tes_task['description'],
+        'state': 'SUBMISSION_FAILED',
+        'status': 'SUBMISSION_FAILED',
+        'creation_time': now_iso,
+        'submitted_at': now_iso,
+        'start_time': None,
+        'end_time': None,
+        'tes_url': tes_url,
+        'tes_name': tes_name,
+        'tes_endpoint': tes_endpoint,
+        'inputs': tes_task.get('inputs', []),
+        'outputs': tes_task.get('outputs', []),
+        'resources': tes_task.get('resources', {}),
+        'executors': tes_task.get('executors', []),
+        'volumes': [],
+        'tags': {}
+    }
+    
+    # Add error details if provided
+    if error_message:
+        failed_task['error_message'] = error_message
+    if error_type:
+        failed_task['error_type'] = error_type
+    if error_code:
+        failed_task['error_code'] = error_code
+    if error_reason:
+        failed_task['error_reason'] = error_reason
+    if http_status_code:
+        failed_task['http_status_code'] = http_status_code
+    
+    return failed_task
+
+def build_error_response(success=False, error=None, error_type=None, error_code=None,
+                        reason=None, dashboard_task_id=None, tes_url=None, tes_name=None, 
+                        tes_endpoint=None, status_code=None):
+    """
+    Construct a standardized error response.
+    
+    Args:
+        dashboard_task_id: The local dashboard task record ID (UUID) for failed submissions
+        status_code: HTTP status code from TES response (if applicable)
+    
+    Returns:
+        Dict containing consistent error response structure
+    """
+    response = {
+        'success': success,
+        'error': error,
+        'error_type': error_type,
+        'error_code': error_code,
+        'reason': reason,
+        'dashboard_task_id': dashboard_task_id,  # Local dashboard record ID (not TES task_id)
+        'tes_url': tes_url,
+        'tes_name': tes_name,
+        'tes_endpoint': tes_endpoint
+    }
+    
+    if status_code is not None:
+        response['status_code'] = status_code
+    
+    return response
 
 @tasks_bp.route('/api/tasks', methods=['GET'])
 def get_tasks():
@@ -35,10 +129,34 @@ def submit_task():
             if inst['url'].rstrip('/') == tes_url.rstrip('/'):
                 tes_name = inst['name']
                 break
+            
+            # bug: demo python script task does not complete #12
+        # Parse command - handle both list and string formats with proper shell-like quoting
+        command_input = data.get('command')
+        if isinstance(command_input, list):
+            command = command_input
+        elif isinstance(command_input, str) and command_input:
+            try:
+                # Use shlex.split() to properly handle quoted arguments
+                command = shlex.split(command_input)
+            except ValueError as e:
+                # Log parsing error and return 400 for invalid command syntax
+                error_msg = f"Invalid command syntax: {str(e)}. Command contains unmatched quotes or invalid escape sequences."
+                logger.error(f"Command parsing failed for '{command_input}': {e}")
+                return jsonify({
+                    'success': False,
+                    'error': error_msg,
+                    'error_type': 'invalid_command',
+                    'error_code': 'INVALID_COMMAND_SYNTAX',
+                    'reason': 'The command string contains syntax errors. Check for unmatched quotes or invalid escape sequences.',
+                    'invalid_command': command_input
+                }), 400
+        else:
+            command = ['echo', 'Hello World']
         
         executor = {
             "image": docker_image,
-            "command": data.get('command') if isinstance(data.get('command'), list) else (data.get('command', '').split() if data.get('command') else ['echo', 'Hello World']),
+            "command": command,
             "workdir": data.get('workdir', '/tmp')
         }
         
@@ -100,13 +218,24 @@ def submit_task():
             
             try:
                 print(f"  Trying service-info: {service_info_url}")
-                test_response = requests.get(service_info_url, timeout=10) 
-                if test_response.status_code in [200, 403]:
+                test_response = requests.get(service_info_url, timeout=10)
+                
+                if test_response.status_code == 200:
                     service_is_reachable = True
                     working_endpoint = tasks_url
                     print(f"  ✅ Service reachable at {service_info_url} (status {test_response.status_code})")
                     print(f"  Will use tasks endpoint: {tasks_url}")
                     break
+                elif test_response.status_code in [401, 403]:
+                    # Authentication required - treat as unreachable since we can't use it
+                    print(f"  🔐 Authentication required at {service_info_url} (status {test_response.status_code})")
+                    connectivity_error_info = {
+                        'error_type': 'unauthorized',
+                        'error_code': 'UNAUTHORIZED',
+                        'message': 'Authentication required - TES instance requires credentials',
+                        'reason': 'This TES instance requires authentication. Please configure TESK_PROD_TOKEN or credentials in environment variables.'
+                    }
+                    continue
                 else:
                     print(f"  ⚠️ Service returned status {test_response.status_code}")
                     
@@ -176,29 +305,40 @@ def submit_task():
             
         if not service_is_reachable:
             print(f"❌ All service-info endpoints failed for {tes_name}")
-            if connectivity_error_info:
-                return jsonify({
-                    'success': False,
-                    'error': connectivity_error_info['message'],
-                    'error_type': connectivity_error_info['error_type'],
-                    'error_code': connectivity_error_info['error_code'],
-                    'reason': connectivity_error_info['reason'],
-                    'tes_url': tes_url,
-                    'tes_name': tes_name
-                }), 503
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Could not reach TES instance',
-                    'error_type': 'service_unavailable',
-                    'error_code': 'SERVICE_UNAVAILABLE',
-                    'reason': 'None of the service-info endpoints responded',
-                    'tes_url': tes_url,
-                    'tes_name': tes_name
-                }), 503
+             # feat: add failed submission tasks to task management #11
+            error_message = connectivity_error_info['message'] if connectivity_error_info else 'Could not reach TES instance'
+            error_type = connectivity_error_info['error_type'] if connectivity_error_info else 'service_unavailable'
+            error_code = connectivity_error_info['error_code'] if connectivity_error_info else 'SERVICE_UNAVAILABLE'
+            error_reason = connectivity_error_info['reason'] if connectivity_error_info else 'None of the service-info endpoints responded'
+            
+            failed_task = build_failed_task(
+                tes_task=tes_task,
+                tes_url=tes_url,
+                tes_name=tes_name,
+                tes_endpoint=None,
+                error_message=error_message,
+                error_type=error_type,
+                error_code=error_code,
+                error_reason=error_reason
+            )
+            
+            add_task(failed_task)
+            
+            return jsonify(build_error_response(
+                success=False,
+                error=error_message,
+                error_type=error_type,
+                error_code=error_code,
+                reason=error_reason,
+                dashboard_task_id=failed_task['id'],
+                tes_url=tes_url,
+                tes_name=tes_name,
+                tes_endpoint=None
+            )), 503
          
         tes_endpoint = working_endpoint
         print(f"🚀 Submitting task to {tes_endpoint}")
+        print(f"📦 Task payload: {json.dumps(tes_task, indent=2)}")
          
         credentials = get_instance_credentials(tes_name, tes_url)
         headers = {
@@ -301,7 +441,7 @@ def submit_task():
         else:
             error_type_map = {
                 400: {'error_type': 'bad_request', 'error_code': 'BAD_REQUEST', 'reason': 'The task specification is invalid or malformed'},
-                401: {'error_type': 'unauthorized', 'error_code': 'UNAUTHORIZED', 'reason': 'Authentication required or credentials are invalid'},
+                401: {'error_type': 'unauthorized', 'error_code': 'UNAUTHORIZED', 'reason': 'Authentication required. Please configure TESK_PROD_TOKEN or TESK_PROD_USER/TESK_PROD_PASSWORD environment variables for this instance.'},
                 403: {'error_type': 'forbidden', 'error_code': 'FORBIDDEN', 'reason': 'You do not have permission to submit tasks to this instance'},
                 404: {'error_type': 'not_found', 'error_code': 'NOT_FOUND', 'reason': 'The TES endpoint was not found. Check if the URL is correct.'},
                 408: {'error_type': 'timeout', 'error_code': 'TIMEOUT', 'reason': 'The request timed out. The TES instance may be overloaded.'},
@@ -319,29 +459,54 @@ def submit_task():
             })
             
             error_msg = f'TES submission failed with status {response.status_code}'
+            print(f"❌ TES returned status {response.status_code}")
+            print(f"Response headers: {dict(response.headers)}")
+            print(f"Response body: {response.text[:500]}")
+            
             try:
                 error_data = response.json()
+                print(f"Error data JSON: {error_data}")
                 if error_data.get('message'):
                     error_msg = error_data.get('message')
                 elif error_data.get('error'):
                     error_msg = error_data.get('error')
+                elif error_data.get('detail'):
+                    error_msg = error_data.get('detail')
+                elif error_data.get('title'):
+                    error_msg = error_data.get('title')
                 else:
                     error_msg = f'{error_msg}: {str(error_data)}'
             except:
                 response_text = response.text[:200] if response.text else 'No error details provided'
                 error_msg = f'{error_msg}: {response_text}'
             
-            return jsonify({
-                'success': False,
-                'error': error_msg,
-                'error_type': error_info['error_type'],
-                'error_code': error_info['error_code'],
-                'reason': error_info['reason'],
-                'tes_endpoint': tes_endpoint,
-                'tes_url': tes_url,
-                'tes_name': tes_name,
-                'status_code': response.status_code
-            }), 400
+            # feat: add failed submission tasks to task management #11
+            failed_task = build_failed_task(
+                tes_task=tes_task,
+                tes_url=tes_url,
+                tes_name=tes_name,
+                tes_endpoint=tes_endpoint,
+                error_message=error_msg,
+                error_type=error_info['error_type'],
+                error_code=error_info['error_code'],
+                error_reason=error_info['reason'],
+                http_status_code=response.status_code
+            )
+            
+            add_task(failed_task)
+            
+            return jsonify(build_error_response(
+                success=False,
+                error=error_msg,
+                error_type=error_info['error_type'],
+                error_code=error_info['error_code'],
+                reason=error_info['reason'],
+                dashboard_task_id=failed_task['id'],
+                tes_url=tes_url,
+                tes_name=tes_name,
+                tes_endpoint=tes_endpoint,
+                status_code=response.status_code
+            )), response.status_code
     
     except Exception as e:
         import traceback

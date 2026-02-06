@@ -66,7 +66,7 @@ export const usePolling = (fetchFunction, interval = 5000, dependencies = []) =>
       isMountedRef.current = false;
       stopPolling();
     };
-  }, dependencies);
+  }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {

@@ -86,7 +86,7 @@ def update_single_task_status(task):
     return False
 
 def update_task_statuses():
-    terminal_states = ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED']
+    terminal_states = ['COMPLETE', 'CANCELED', 'SYSTEM_ERROR', 'EXECUTOR_ERROR', 'PREEMPTED', 'SUBMISSION_FAILED']
     
     while True:
         try:

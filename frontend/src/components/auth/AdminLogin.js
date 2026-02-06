@@ -17,7 +17,7 @@ const LoginContainer = styled.div`
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
+    right: 0; 
     bottom: 0;
     background-image: 
       radial-gradient(circle at 25% 25%, rgba(75, 85, 99, 0.1) 0%, transparent 50%),

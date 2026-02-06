@@ -28,6 +28,27 @@ def get_healthy_instances_route():
         print(f"❌ Error in get_healthy_instances: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@instances_bp.route('/api/instances-with-status', methods=['GET'])
+def get_instances_with_status():
+    """Get all TES instances with their current health status"""
+    try:
+        from utils.tes_utils import load_tes_location_data
+        instances = load_tes_location_data()
+        
+        # Fetch status for all instances in parallel
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(fetch_tes_status, instances))
+        
+        return jsonify({
+            'instances': results,
+            'count': len(results),
+            'last_updated': datetime.now(timezone.utc).isoformat()
+        })
+        
+    except Exception as e:
+        print(f"Error in get_instances_with_status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @instances_bp.route('/api/tes_locations', methods=['GET'])
 def tes_locations():
     from utils.tes_utils import load_tes_location_data

@@ -28,7 +28,46 @@ def fetch_tes_status(instance):
         r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
         latency_ms = int((time.time() - start_time) * 1000)
 
-        status = "healthy" if r.status_code == 200 else "unhealthy"
+        # First check service-info endpoint
+        if r.status_code in [401, 403]:
+            status = "unhealthy"  # Authentication required but not available
+        elif r.status_code != 200:
+            status = "unhealthy"
+        else:
+            # Service-info is accessible, but we need to check if tasks endpoint is usable
+            # Try a HEAD/OPTIONS request to tasks endpoint to see if it requires auth
+            try:
+                instance_name = instance.get("name", "")
+                credentials = get_instance_credentials(instance_name, tes_base_url)
+                
+                # Test tasks endpoint with credentials (if available)
+                headers = {'Accept': 'application/json'}
+                auth = None
+                if credentials.get('token'):
+                    headers['Authorization'] = f"Bearer {credentials['token']}"
+                elif credentials.get('user') and credentials.get('password'):
+                    auth = (credentials['user'], credentials['password'])
+                
+                # Try to list tasks (with view=MINIMAL to reduce payload)
+                tasks_response = requests.get(
+                    f"{tes_base_url}/ga4gh/tes/v1/tasks?view=MINIMAL",
+                    headers=headers,
+                    auth=auth,
+                    timeout=5
+                )
+                
+                # If tasks endpoint returns 401/403, mark as unhealthy (auth required but not configured)
+                if tasks_response.status_code in [401, 403]:
+                    print(f"⚠️ {instance.get('name')} tasks endpoint requires authentication (status {tasks_response.status_code})")
+                    status = "unhealthy"
+                else:
+                    # Tasks endpoint is accessible (200) or returns other non-auth error
+                    status = "healthy"
+            except Exception as tasks_error:
+                print(f"⚠️ Could not check tasks endpoint for {instance.get('name')}: {tasks_error}")
+                # If we can't check tasks endpoint, assume healthy based on service-info
+                status = "healthy"
+        
         version = ""
         try:
             version = r.json().get("version", "")

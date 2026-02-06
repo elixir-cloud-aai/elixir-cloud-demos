@@ -4,6 +4,7 @@ import instanceService from '../services/instanceService';
 const useInstances = () => {
   const [state, setState] = useState({
     instances: [],
+    allInstances: [],
     loading: true,
     error: null,
     lastUpdate: null
@@ -15,7 +16,11 @@ const useInstances = () => {
     };
     instanceService.addListener(handleUpdate);
     const initialState = instanceService.getHealthyInstances();
-    setState(initialState);
+    const allInstancesState = instanceService.getAllInstancesWithStatus();
+    setState({
+      ...initialState,
+      allInstances: allInstancesState.instances
+    });
     return () => {
       instanceService.removeListener(handleUpdate);
     };
@@ -26,6 +31,7 @@ const useInstances = () => {
 
   return {
     instances: state.instances,
+    allInstances: state.allInstances,
     loading: state.loading,
     error: state.error,
     lastUpdate: state.lastUpdate,

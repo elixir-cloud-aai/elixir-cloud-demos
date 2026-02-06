@@ -406,7 +406,7 @@ const Utilities = () => {
       ));
        
       const serviceInfo = response.data;
-      let successMessage = `✅ Connection Test Successful!\n\nInstance: ${instanceName}\nResponse Time: ${responseTime}ms`;
+      let successMessage = `Connection Test Successful!\n\nInstance: ${instanceName}\nResponse Time: ${responseTime}ms`;
       
       if (serviceInfo && serviceInfo.name) {
         successMessage += `\nService Name: ${serviceInfo.name}`;
@@ -417,7 +417,7 @@ const Utilities = () => {
       
       alert(successMessage);
     } catch (error) { 
-      let errorMessage = `❌ Connection Test Failed\n\nInstance: ${instanceName}\nURL: ${url}\n\n`;
+      let errorMessage = `Connection Test Failed\n\nInstance: ${instanceName}\nURL: ${url}\n\n`;
       let errorReason = '';
       let errorCode = '';
       let errorType = '';

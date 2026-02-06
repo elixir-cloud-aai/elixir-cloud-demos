@@ -1,3 +1,4 @@
+from datetime import timezone
 import os
 from flask import Flask, g, request
 from flask_cors import CORS
@@ -70,6 +71,27 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(network_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(nodes_bp)
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Kubernetes probes"""
+    try:
+        # Check MongoDB connection if using middleware management
+        from pymongo import MongoClient
+        client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/protes_db'), serverSelectionTimeoutMS=2000)
+        client.server_info()
+        
+        return jsonify({
+            'status': 'healthy',
+            'mongodb': 'connected',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 503
 
 # Middleware request/response handlers
 if MIDDLEWARE_AVAILABLE and middleware_manager:

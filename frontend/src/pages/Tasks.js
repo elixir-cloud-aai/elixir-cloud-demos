@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { taskService } from '../services/taskService';
@@ -13,7 +13,9 @@ import {
   Plus, 
   Eye, 
   FileText,
-  Search
+  Search,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 const PageContainer = styled.div`
@@ -133,6 +135,21 @@ const TableHeader = styled.th`
   font-weight: 600;
   color: #495057;
   font-size: 14px;
+  cursor: ${props => props.sortable ? 'pointer' : 'default'};
+  user-select: none;
+  position: relative;
+  
+  &:hover {
+    background: ${props => props.sortable ? '#e9ecef' : '#f8f9fa'};
+  }
+`;
+
+const SortIndicator = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  opacity: ${props => props.active ? '1' : '0.3'};
+  transition: opacity 0.2s;
 `;
 
 const TableRow = styled.tr`
@@ -193,6 +210,8 @@ const Tasks = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredTasks, setFilteredTasks] = useState([]);
+  const [sortColumn, setSortColumn] = useState('creation_time');
+  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' or 'desc'
  
   const { 
     data: tasksData, 
@@ -200,6 +219,74 @@ const Tasks = () => {
     error,
     refetch 
   } = usePolling(taskService.listTasks, POLLING_INTERVALS.NORMAL);
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column with ascending as default
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+  
+  const getSortIndicator = (column) => {
+    if (sortColumn !== column) {
+      return (
+        <SortIndicator active={false}>
+          <ChevronUp size={14} />
+        </SortIndicator>
+      );
+    }
+    return (
+      <SortIndicator active={true}>
+        {sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </SortIndicator>
+    );
+  };
+  
+  const sortTasks = useCallback((tasks) => {
+    const sorted = [...tasks].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortColumn) {
+        case 'id':
+          aValue = a.id || '';
+          bValue = b.id || '';
+          break;
+        case 'name':
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
+          break;
+        case 'state':
+          aValue = a.state || '';
+          bValue = b.state || '';
+          break;
+        case 'tes_name':
+          aValue = (a.tes_name || a.tes_url || '').toLowerCase();
+          bValue = (b.tes_name || b.tes_url || '').toLowerCase();
+          break;
+        case 'creation_time':
+          // Parse dates for comparison
+          aValue = a.creation_time ? new Date(a.creation_time).getTime() : 0;
+          bValue = b.creation_time ? new Date(b.creation_time).getTime() : 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      // Handle comparison
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+    
+    return sorted;
+  }, [sortColumn, sortDirection]);
   
   const handleCancelTask = async (tesUrl, taskId) => {
     if (window.confirm('Are you sure you want to cancel this task?')) {
@@ -231,26 +318,25 @@ const Tasks = () => {
       return task && 
              task.id && 
              task.tes_url && 
-             task.state &&
-             task.state !== 'ERROR' &&
-             task.state !== 'SYSTEM_ERROR' &&
-             task.state !== 'EXECUTOR_ERROR' && 
-             !task.error_prone_instance;
+             task.state;
     });
 
-    if (!searchTerm) {
-      setFilteredTasks(healthyTasks);
-    } else {
-      const filtered = healthyTasks.filter(task => 
+    // Apply search filter
+    let tasksToDisplay = healthyTasks;
+    if (searchTerm) {
+      tasksToDisplay = healthyTasks.filter(task => 
         task.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.tes_url?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.tes_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredTasks(filtered);
     }
-  }, [tasksData, searchTerm]);
+    // Apply sorting
+    const sortedTasks = sortTasks(tasksToDisplay);
+    setFilteredTasks(sortedTasks);
+  }, [tasksData, searchTerm, sortTasks]);
+
 
   return (
     <PageContainer>
@@ -306,11 +392,26 @@ const Tasks = () => {
           <Table>
             <thead>
               <tr>
-                <TableHeader>Task ID</TableHeader>
-                <TableHeader>Name</TableHeader>
-                <TableHeader>Status</TableHeader>
-                <TableHeader>TES Instance</TableHeader>
-                <TableHeader>Created</TableHeader>
+                   <TableHeader sortable onClick={() => handleSort('id')}>
+                  Task ID
+                  {getSortIndicator('id')}
+                </TableHeader>
+                <TableHeader sortable onClick={() => handleSort('name')}>
+                  Name
+                  {getSortIndicator('name')}
+                </TableHeader>
+                <TableHeader sortable onClick={() => handleSort('state')}>
+                  Status
+                  {getSortIndicator('state')}
+                </TableHeader>
+                <TableHeader sortable onClick={() => handleSort('tes_name')}>
+                  TES Instance
+                  {getSortIndicator('tes_name')}
+                </TableHeader>
+                <TableHeader sortable onClick={() => handleSort('creation_time')}>
+                  Created
+                  {getSortIndicator('creation_time')}
+                </TableHeader>
                 <TableHeader>Actions</TableHeader>
               </tr>
             </thead>
