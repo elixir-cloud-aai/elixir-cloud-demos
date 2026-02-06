@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import api, { testConnection } from '../services/api';
 import { taskService } from '../services/taskService';
 import usePolling from '../hooks/usePolling';
+import useInstances from '../hooks/useInstances';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { formatDate, formatTaskStatus } from '../utils/formatters';
@@ -346,126 +347,88 @@ const Dashboard = () => {
   const [connectionTest, setConnectionTest] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
 
+  // ✅ USE VERIFIED HEALTHY INSTANCES ONLY
+   const [allInstances, setAllInstances] = useState([]);
+  const [instancesLoading, setInstancesLoading] = useState(true);
+  const [instancesError, setInstancesError] = useState(null);
+
+
+   const loadAllInstances = useCallback(async () => {
+    try {
+      setInstancesLoading(true);
+      setInstancesError(null);
+      
+      const response = await api.get('/api/instances-with-status');
+      
+      const instancesData = Array.isArray(response.data) 
+        ? response.data 
+        : response.data.instances || [];
+      
+      setAllInstances(instancesData);
+      
+    } catch (error) {
+      console.error('Failed to load instances:', error);
+      setInstancesError('Failed to load instances');
+      setAllInstances([]);
+    } finally {
+      setInstancesLoading(false);
+    }
+  }, []);
+
   const [apiHealth, setApiHealth] = useState({
     loading: true,
     healthy: 0,
     unhealthy: 0,
     total: 0,
-    percentage: 0,
-    status: 'unknown',
+    percentage: 100,
+    status: 'healthy',
     services: [],
     error: null,
     lastUpdated: null,
     loaded: false
   });
 
-  const fetchApiHealthRef = useRef(null);
-  
-  const fetchApiHealth = useCallback(async () => {
-  try {
-    setApiHealth(prev => ({ ...prev, loading: true }));
-    
-    const dashboardResponse = await api.get('/api/dashboard_data');
-    const allInstances = dashboardResponse.data.tes_instances || [];
-    
-    console.log('📋 Checking health for', allInstances.length, 'instances');
-    
-    const healthCheckPromises = allInstances.map(async (instance) => {
-      try {
-        const startTime = Date.now();
-        await api.get('/api/service_info', {
-          params: { tes_url: instance.url },
-          timeout: 5000 
-        });
-        
-        const responseTime = Date.now() - startTime;
-        
-        return {
-          name: instance.name,
-          url: instance.url,
-          status: 'online',
-          health: 'healthy',
-          response_time: responseTime,
-          last_checked: new Date().toISOString()
-        };
-      } catch (error) {
-        return {
-          name: instance.name,
-          url: instance.url,
-          status: 'offline',
-          health: 'unhealthy',
-          response_time: null,
-          last_checked: new Date().toISOString(),
-          error: error.message
-        };
-      }
-    });
-    
-    const healthResults = await Promise.all(healthCheckPromises);
-    
-    const total = healthResults.length;
-    const healthy = healthResults.filter(r => r.health === 'healthy').length;
-    const unhealthy = total - healthy;
-    const percentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
-    
-    let status = 'unknown';
-    if (total === 0) {
-      status = 'unknown';
-    } else if (percentage >= 80) {
-      status = 'healthy';
-    } else if (percentage >= 50) {
-      status = 'warning';
-    } else {
-      status = 'error';
-    }
-    
-    console.log('📈 Health check results:', {
-      total,
-      healthy,
-      unhealthy,
-      percentage,
-      status
-    });
-    
-    setApiHealth({
-      loading: false,
-      loaded: true,
-      healthy: healthy || 0,
-      unhealthy: unhealthy || 0,
-      total: total || 0,
-      percentage: percentage || 0,
-      status,
-      services: healthResults,
-      lastUpdated: new Date().toISOString(),
-      error: null
-    });
-    
-  } catch (error) {
-    console.error('❌ Error fetching API health status:', error);
-    
-    const errorMessage = error.response?.data?.error || error.message || 'Unable to connect to health monitoring service';
-    
-    setApiHealth(prev => ({
-      ...prev,
-      loading: false,
-      loaded: true,
-      status: 'error',
-      error: errorMessage,
-      healthy: 0,
-      unhealthy: 0,
-      total: 0,
-      percentage: 0
-    }));
-  }
-}, []);
-  
-  fetchApiHealthRef.current = fetchApiHealth;
-
   useEffect(() => {
-    if (fetchApiHealthRef.current) {
-      fetchApiHealthRef.current();
+    if (!instancesLoading) {
+      const total = allInstances.length;
+      const healthy = allInstances.filter(inst => inst.status === 'healthy').length;
+      const unhealthy = total - healthy;
+      const percentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
+      
+      let status = 'healthy';
+      if (total === 0) {
+        status = 'unknown';
+      } else if (unhealthy > healthy) {
+        status = 'error';
+      } else if (unhealthy > 0) {
+        status = 'warning';
+      }
+      
+      setApiHealth({
+        loading: false,
+        loaded: true,
+        healthy,
+        unhealthy,
+        total,
+        percentage,
+        status,
+        services: allInstances,
+        lastUpdated: new Date().toISOString(),
+        error: instancesError
+      });
+    } else {
+      setApiHealth(prev => ({ ...prev, loading: true }));
     }
-  }, []);
+  }, [allInstances, instancesLoading, instancesError]);
+
+  // ✅ Load instances on mount
+  useEffect(() => {
+    loadAllInstances();
+    
+    // Refresh every hour
+    const interval = setInterval(loadAllInstances, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [loadAllInstances]);
 
   const refetchDashboardRef = useRef(null);
 
@@ -477,6 +440,7 @@ const Dashboard = () => {
   } = usePolling(() => taskService.listTasks(), 3600000);
 
   refetchDashboardRef.current = refetchDashboard;
+
 
   let tasksData, dashboardData;
   
@@ -495,14 +459,12 @@ const Dashboard = () => {
   const tasksError = dashboardError;
   const refetchTasks = refetchDashboard;
 
-  const handleRefresh = useCallback(() => {
+   const handleRefresh = useCallback(() => {
     if (refetchDashboardRef.current) {
       refetchDashboardRef.current();
     }
-    if (fetchApiHealthRef.current) {
-      fetchApiHealthRef.current();
-    }
-  }, []);
+    loadAllInstances(); // ✅ Refresh ALL instances
+  }, [loadAllInstances]);
 
   const [directDashboardData, setDirectDashboardData] = React.useState(null);
   
@@ -784,16 +746,12 @@ const Dashboard = () => {
         </HealthStatusBadge>
       )}
       <RefreshButton 
-        onClick={() => {
-          if (fetchApiHealthRef.current) {
-            fetchApiHealthRef.current();
-          }
-        }} 
-        disabled={apiHealth.loading}
+        onClick={loadAllInstances}  // ✅ Change this
+        disabled={instancesLoading}
         title="Refresh API health status"
       >
         <RefreshCw size={14} style={{ marginRight: '5px' }} />
-        {apiHealth.loading ? 'Checking...' : 'Refresh'}
+        {instancesLoading ? 'Checking...' : 'Refresh'}
       </RefreshButton>
     </div>
   </HealthHeader>
@@ -809,13 +767,7 @@ const Dashboard = () => {
         <div style={{ padding: '20px' }}>
           <ErrorMessage message={apiHealth.error} />
           <div style={{ marginTop: '15px', textAlign: 'center' }}>
-            <RefreshButton 
-              onClick={() => {
-                if (fetchApiHealthRef.current) {
-                  fetchApiHealthRef.current();
-                }
-              }}
-            >
+            <RefreshButton onClick={loadAllInstances} disabled={instancesLoading}>
               <RefreshCw size={14} style={{ marginRight: '5px' }} />
               Retry
             </RefreshButton>
