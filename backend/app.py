@@ -72,27 +72,6 @@ app.register_blueprint(network_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(nodes_bp)
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint for Kubernetes probes"""
-    try:
-        # Check MongoDB connection if using middleware management
-        from pymongo import MongoClient
-        client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017/protes_db'), serverSelectionTimeoutMS=2000)
-        client.server_info()
-        
-        return jsonify({
-            'status': 'healthy',
-            'mongodb': 'connected',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e),
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }), 503
-
 # Middleware request/response handlers
 if MIDDLEWARE_AVAILABLE and middleware_manager:
     def create_middleware_context():
@@ -212,6 +191,38 @@ if MIDDLEWARE_AVAILABLE and middleware_manager:
             traceback.print_exc()
         
         return response
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Kubernetes probes"""
+    try:
+        # Check MongoDB if configured
+        mongo_status = 'not_configured'
+        if os.getenv('MONGODB_URI'):
+            try:
+                from pymongo import MongoClient
+                client = MongoClient(
+                    os.getenv('MONGODB_URI', 'mongodb://localhost:27017/protes_db'),
+                    serverSelectionTimeoutMS=2000
+                )
+                client.server_info()
+                mongo_status = 'connected'
+            except Exception as mongo_err:
+                mongo_status = f'error: {str(mongo_err)}'
+        
+        return jsonify({
+            'status': 'healthy',
+            'mongodb': mongo_status,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'version': '1.0.0',
+            'environment': os.getenv('FLASK_ENV', 'unknown')
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 503
 
 if __name__ == '__main__':
     from datetime import datetime
