@@ -257,7 +257,7 @@ def update_node(node_id):
 
 @nodes_bp.route('/nodes/<node_id>/health', methods=['GET'])
 def check_node_health(node_id):
-    """Check health of a specific node"""
+    """Check health of a specific node with ACTUAL connection test"""
     try:
         tes_locations_file = Path(__file__).parent.parent / 'tes_instance_locations.json'
         if not tes_locations_file.exists():
@@ -271,56 +271,81 @@ def check_node_health(node_id):
         if not service:
             return jsonify({'error': f'Service with ID {node_id} not found'}), 404
         
-        url = service.get('url', '')
+        url = service.get('url', '').rstrip('/')
+        
+        # Try multiple TES API endpoints in order
         endpoints_to_try = [
             f"{url}/ga4gh/tes/v1/service-info",
             f"{url}/service-info",
-            f"{url}/api/service-info",
-            f"{url}/api/v1/service-info",   
+            f"{url}/v1/service-info",
         ]
         
+        last_error = None
         for endpoint in endpoints_to_try:
             try:
                 start_time = time.time()
-                response = requests.get(endpoint, timeout=5, headers={
-                    'Accept': 'application/json',
-                    'User-Agent': 'TES-Dashboard/1.0'
-                })
+                response = requests.get(
+                    endpoint, 
+                    timeout=10,  # Increased timeout
+                    headers={
+                        'Accept': 'application/json',
+                        'User-Agent': 'TES-Dashboard/1.0'
+                    },
+                    verify=True,  # SSL verification
+                    allow_redirects=True
+                )
                 response_time = round((time.time() - start_time) * 1000)
                 
-                if response.status_code == 200:
+                # SUCCESS - Got valid response
+                if response.status_code in [200, 403]:  # 403 = auth required but service exists
                     service_info = None
-                    try:
-                        service_info = response.json()
-                    except:
-                        pass
+                    if response.status_code == 200:
+                        try:
+                            service_info = response.json()
+                        except:
+                            pass
                     
                     return jsonify({
                         'status': 'online',
+                        'healthy': True,
                         'responseTime': response_time,
                         'endpoint': endpoint,
                         'serviceInfo': service_info,
+                        'statusCode': response.status_code,
+                        'note': 'Service requires authentication' if response.status_code == 403 else None,
                         'lastChecked': datetime.now().isoformat()
                     })
-                elif response.status_code == 403:
-                    return jsonify({
-                        'status': 'online',
-                        'responseTime': response_time,
-                        'endpoint': endpoint,
-                        'note': 'Service requires authentication',
-                        'lastChecked': datetime.now().isoformat()
-                    })
-            except:
+                    
+                last_error = f"HTTP {response.status_code}"
+                
+            except requests.exceptions.Timeout:
+                last_error = "Connection timeout (>10s)"
+                continue
+            except requests.exceptions.ConnectionError:
+                last_error = "Connection refused"
+                continue
+            except requests.exceptions.SSLError:
+                last_error = "SSL certificate error"
+                continue
+            except Exception as e:
+                last_error = str(e)
                 continue
         
+        # ALL ENDPOINTS FAILED
         return jsonify({
             'status': 'offline',
-            'error': 'All service endpoints failed to respond',
+            'healthy': False,
+            'error': f'All endpoints failed. Last error: {last_error}',
+            'endpoints_tried': endpoints_to_try,
             'lastChecked': datetime.now().isoformat()
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'healthy': False,
+            'error': str(e)
+        }), 500
 
 @nodes_bp.route('/service-status', methods=['GET'])
 def service_status():

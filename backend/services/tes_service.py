@@ -6,17 +6,55 @@ from utils.auth_utils import get_instance_credentials
 from services.task_service import get_submitted_tasks
 
 def get_healthy_instances():
-    from datetime import datetime, timezone
-    instances = []
-    tes_instances = load_tes_instances()
-    for tes_instance in tes_instances:
-        instances.append({
-            "name": tes_instance["name"],
-            "url": tes_instance["url"],
-            "status": "healthy",
-            "last_checked": datetime.now(timezone.utc).isoformat()
-        })
-    return instances
+    """Get ONLY instances that are actually responding (with caching)"""
+    import json
+    from pathlib import Path
+    import requests
+    import time
+    
+    # Load all configured instances
+    tes_locations_file = Path(__file__).parent.parent / 'tes_instance_locations.json'
+    if not tes_locations_file.exists():
+        return []
+    
+    with open(tes_locations_file, 'r') as f:
+        instances = json.load(f)
+    
+    # Check each instance's actual health
+    healthy_instances = []
+    
+    for instance in instances:
+        url = instance.get('url', '').rstrip('/')
+        instance_id = instance.get('id', url)
+        
+        # Try to connect to service-info endpoint
+        endpoints = [
+            f"{url}/ga4gh/tes/v1/service-info",
+            f"{url}/service-info",
+            f"{url}/v1/service-info"
+        ]
+        
+        is_healthy = False
+        for endpoint in endpoints:
+            try:
+                response = requests.get(
+                    endpoint,
+                    timeout=5,
+                    headers={'Accept': 'application/json'}
+                )
+                if response.status_code in [200, 403]:  # 403 = exists but needs auth
+                    is_healthy = True
+                    break
+            except:
+                continue
+        
+        # Only add if actually healthy
+        if is_healthy:
+            instance['status'] = 'healthy'
+            instance['last_checked'] = datetime.now().isoformat()
+            healthy_instances.append(instance)
+    
+    return healthy_instances
 
 def fetch_tes_status(instance):
     try:
