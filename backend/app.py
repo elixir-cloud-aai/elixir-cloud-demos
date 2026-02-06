@@ -1,6 +1,6 @@
-from datetime import timezone
+from datetime import datetime, timezone
+from flask import Flask, g, request, jsonify
 import os
-from flask import Flask, g, request
 from flask_cors import CORS
 from config import CORS_ORIGINS, SECRET_KEY, UPLOAD_FOLDER
 from services.task_service import start_task_status_updater
@@ -225,7 +225,6 @@ def health_check():
         }), 503
 
 if __name__ == '__main__':
-    from datetime import datetime
     
     port = int(os.getenv('PORT', '8000'))
     debug_mode = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
