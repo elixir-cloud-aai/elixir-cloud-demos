@@ -4,3 +4,4 @@ requests==2.31.0
 pymongo==4.6.1
 python-dotenv==1.0.0
 Werkzeug==3.0.1
+PyYAML==6.0.1

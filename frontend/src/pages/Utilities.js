@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import api from '../services/api';
+import useInstances from '../hooks/useInstances';
 import { 
   Server, Clock, AlertCircle, CheckCircle, Play, 
   ExternalLink, RotateCcw, Globe
@@ -293,54 +294,31 @@ const Utilities = () => {
   const [servicesError, setServicesError] = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
  
+  // ✅ NEW: State for ALL instances (including non-working)
   const [tesInstances, setTesInstances] = useState([]);
   const [instancesLoading, setInstancesLoading] = useState(true);
-  const [instancesError, setInstancesError] = useState('');
+  const [instancesError, setInstancesError] = useState(null);
   const [lastStatusUpdate, setLastStatusUpdate] = useState(null);
  
-  const loadTesInstances = useCallback(async () => {
+  // ✅ NEW: Fetch ALL instances with status
+  const loadInstancesWithStatus = useCallback(async () => {
     try {
       setInstancesLoading(true);
-      setInstancesError('');  
-      const response = await api.get('/api/dashboard_data');
-      const tesInstancesData = response.data.tes_instances || [];
-       
-      const instancesWithStatus = await Promise.all(
-        tesInstancesData.map(async (instance) => {
-          try {
-            const startTime = Date.now();
-             
-            await api.get('/api/service_info', {
-              params: { tes_url: instance.url },
-              timeout: 10000 
-            });
-            
-            const responseTime = Date.now() - startTime;
-            
-            return {
-              ...instance,
-              status: 'healthy',
-              lastChecked: new Date().toISOString(),
-              responseTime,
-              error: null
-            };
-          } catch (error) {
-            return {
-              ...instance,
-              status: 'error',
-              lastChecked: new Date().toISOString(),
-              responseTime: null,
-              error: error.message
-            };
-          }
-        })
-      );
+      setInstancesError(null);
       
-      setTesInstances(instancesWithStatus);
+      const response = await api.get('/api/instances-with-status');
+      
+      const instancesData = Array.isArray(response.data) 
+        ? response.data 
+        : response.data.instances || [];
+      
+      setTesInstances(instancesData);
       setLastStatusUpdate(new Date().toISOString());
+      
     } catch (error) {
       console.error('Failed to load TES instances:', error);
-      setInstancesError('Failed to load TES instances: ' + error.message);
+      setInstancesError('Failed to load TES instances');
+      setTesInstances([]);
     } finally {
       setInstancesLoading(false);
     }
@@ -393,17 +371,8 @@ const Utilities = () => {
       
       const responseTime = Date.now() - startTime;
        
-      setTesInstances(prev => prev.map(inst => 
-        inst.url === url 
-          ? { 
-              ...inst, 
-              status: 'healthy', 
-              lastChecked: new Date().toISOString(),
-              responseTime,
-              error: null
-            }
-          : inst
-      ));
+      // Refresh after test
+      await loadInstancesWithStatus();
        
       const serviceInfo = response.data;
       let successMessage = `Connection Test Successful!\n\nInstance: ${instanceName}\nResponse Time: ${responseTime}ms`;
@@ -418,75 +387,39 @@ const Utilities = () => {
       alert(successMessage);
     } catch (error) { 
       let errorMessage = `Connection Test Failed\n\nInstance: ${instanceName}\nURL: ${url}\n\n`;
-      let errorReason = '';
-      let errorCode = '';
-      let errorType = '';
       
       if (error.response && error.response.data) {
         const errorData = error.response.data;
         errorMessage += `Error: ${errorData.error || errorData.message || error.message || 'Unknown error'}`;
-        errorReason = errorData.reason || '';
-        errorCode = errorData.error_code || '';
-        errorType = errorData.error_type || '';
-        
-        if (errorReason) {
-          errorMessage += `\n\nReason: ${errorReason}`;
-        }
-        if (errorCode) {
-          errorMessage += `\nError Code: ${errorCode}`;
-        }
       } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        errorMessage += `Error: Connection Timeout\n\nThe TES instance did not respond within 10 seconds.\n\nReason: The instance may be overloaded, offline, or unreachable.`;
-        errorCode = 'TIMEOUT';
-        errorType = 'timeout';
-      } else if (error.code === 'ENOTFOUND' || error.message.includes('resolve')) {
-        errorMessage += `Error: DNS Resolution Failed\n\nCannot resolve the hostname.\n\nReason: The hostname "${url}" cannot be resolved. Check if the URL is correct.`;
-        errorCode = 'DNS_ERROR';
-        errorType = 'dns_error';
-      } else if (error.code === 'ECONNREFUSED' || error.message.includes('refused')) {
-        errorMessage += `Error: Connection Refused\n\nThe TES instance is not accepting connections.\n\nReason: The instance may be offline, the port may be blocked, or the service may not be running.`;
-        errorCode = 'CONNECTION_REFUSED';
-        errorType = 'connection_refused';
-      } else if (error.message) {
-        errorMessage += `Error: ${error.message}`;
+        errorMessage += `Error: Connection Timeout\n\nThe TES instance did not respond within 10 seconds.`;
       } else {
-        errorMessage += `Error: Unknown error occurred`;
-      } 
-      setTesInstances(prev => prev.map(inst => 
-        inst.url === url 
-          ? { 
-              ...inst, 
-              status: 'error', 
-              lastChecked: new Date().toISOString(),
-              responseTime: null,
-              error: errorReason || error.message || 'Connection failed',
-              errorCode,
-              errorType
-            }
-          : inst
-      ));
+        errorMessage += `Error: ${error.message || 'Unknown error occurred'}`;
+      }
+      
       alert(errorMessage);
     }
   };
 
   const refreshInstanceStatus = () => {
-    loadTesInstances();
+    loadInstancesWithStatus();
   }; 
+
   useEffect(() => { 
     const initialLoad = async () => {
-      await loadTesInstances();
       await checkServiceStatus();
+      await loadInstancesWithStatus();
     };
     
     initialLoad();
     
     const interval = setInterval(() => {
-      loadTesInstances();
+      loadInstancesWithStatus();
       checkServiceStatus();
     }, 60 * 60 * 1000); 
     
     return () => clearInterval(interval); 
-  }, []); 
+  }, [checkServiceStatus, loadInstancesWithStatus]); 
 
   return (
     <UtilitiesContainer>
