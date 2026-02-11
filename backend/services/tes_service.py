@@ -6,7 +6,7 @@ from utils.auth_utils import get_instance_credentials
 from services.task_service import get_submitted_tasks
 
 def get_healthy_instances():
-    """Get ONLY instances that are actually responding (with caching)"""
+    """Get ONLY instances that are actually responding AND can accept tasks (with caching)"""
     import json
     from pathlib import Path
     import requests
@@ -20,36 +20,77 @@ def get_healthy_instances():
     with open(tes_locations_file, 'r') as f:
         instances = json.load(f)
     
-    # Check each instance's actual health
+   
     healthy_instances = []
     
     for instance in instances:
         url = instance.get('url', '').rstrip('/')
         instance_id = instance.get('id', url)
+        instance_name = instance.get('name', '')
         
-        # Try to connect to service-info endpoint
-        endpoints = [
+        
+        service_info_endpoints = [
             f"{url}/ga4gh/tes/v1/service-info",
             f"{url}/service-info",
             f"{url}/v1/service-info"
         ]
         
-        is_healthy = False
-        for endpoint in endpoints:
+        service_info_ok = False
+        for endpoint in service_info_endpoints:
             try:
                 response = requests.get(
                     endpoint,
                     timeout=5,
                     headers={'Accept': 'application/json'}
                 )
-                if response.status_code in [200, 403]:  # 403 = exists but needs auth
-                    is_healthy = True
+                if response.status_code == 200:
+                    service_info_ok = True
                     break
             except:
                 continue
         
-        # Only add if actually healthy
-        if is_healthy:
+       
+        if not service_info_ok:
+            continue
+        
+        
+        credentials = get_instance_credentials(instance_name, url)
+        
+        headers = {'Accept': 'application/json'}
+        auth = None
+        has_credentials = False
+        
+        if credentials.get('token'):
+            headers['Authorization'] = f"Bearer {credentials['token']}"
+            has_credentials = True
+        elif credentials.get('user') and credentials.get('password'):
+            auth = (credentials['user'], credentials['password'])
+            has_credentials = True
+        
+        
+        tasks_endpoints = [
+            f"{url}/ga4gh/tes/v1/tasks?view=MINIMAL",
+            f"{url}/v1/tasks?view=MINIMAL"
+        ]
+        
+        tasks_ok = False
+        for tasks_endpoint in tasks_endpoints:
+            try:
+                tasks_response = requests.get(
+                    tasks_endpoint,
+                    headers=headers,
+                    auth=auth,
+                    timeout=5
+                )
+                
+                if tasks_response.status_code == 200:
+                    tasks_ok = True
+                    break
+            except:
+                continue
+        
+        
+        if tasks_ok:
             instance['status'] = 'healthy'
             instance['last_checked'] = datetime.now().isoformat()
             healthy_instances.append(instance)
@@ -62,9 +103,30 @@ def fetch_tes_status(instance):
         if not tes_base_url:
             return {**instance, "status": "unreachable"}
 
+        # Try multiple service-info endpoint paths
+        endpoints = [
+            f"{tes_base_url}/ga4gh/tes/v1/service-info",
+            f"{tes_base_url}/v1/service-info",
+            f"{tes_base_url}/service-info"
+        ]
+        
+        r = None
+        latency_ms = 0
         start_time = time.time()
-        r = requests.get(f"{tes_base_url}/ga4gh/tes/v1/service-info", timeout=5)
-        latency_ms = int((time.time() - start_time) * 1000)
+        
+        for endpoint in endpoints:
+            try:
+                r = requests.get(endpoint, timeout=5, headers={'Accept': 'application/json'})
+                latency_ms = int((time.time() - start_time) * 1000)
+                if r.status_code in [200, 401, 403]:
+                    # Found the right endpoint
+                    break
+            except:
+                continue
+        
+        if r is None or r.status_code not in [200, 401, 403]:
+            # No working endpoint found
+            return {**instance, "status": "unreachable"}
 
         # First check service-info endpoint
         if r.status_code in [401, 403]:
@@ -72,39 +134,70 @@ def fetch_tes_status(instance):
         elif r.status_code != 200:
             status = "unhealthy"
         else:
-            # Service-info is accessible, but we need to check if tasks endpoint is usable
-            # Try a HEAD/OPTIONS request to tasks endpoint to see if it requires auth
+            
             try:
                 instance_name = instance.get("name", "")
                 credentials = get_instance_credentials(instance_name, tes_base_url)
                 
-                # Test tasks endpoint with credentials (if available)
+                
                 headers = {'Accept': 'application/json'}
                 auth = None
+                has_credentials = False
+                
                 if credentials.get('token'):
                     headers['Authorization'] = f"Bearer {credentials['token']}"
+                    has_credentials = True
                 elif credentials.get('user') and credentials.get('password'):
                     auth = (credentials['user'], credentials['password'])
+                    has_credentials = True
                 
-                # Try to list tasks (with view=MINIMAL to reduce payload)
-                tasks_response = requests.get(
+                
+                tasks_endpoints = [
                     f"{tes_base_url}/ga4gh/tes/v1/tasks?view=MINIMAL",
-                    headers=headers,
-                    auth=auth,
-                    timeout=5
-                )
+                    f"{tes_base_url}/v1/tasks?view=MINIMAL"
+                ]
                 
-                # If tasks endpoint returns 401/403, mark as unhealthy (auth required but not configured)
-                if tasks_response.status_code in [401, 403]:
-                    print(f"⚠️ {instance.get('name')} tasks endpoint requires authentication (status {tasks_response.status_code})")
+                tasks_response = None
+                for tasks_endpoint in tasks_endpoints:
+                    try:
+                        tasks_response = requests.get(
+                            tasks_endpoint,
+                            headers=headers,
+                            auth=auth,
+                            timeout=5
+                        )
+                        if tasks_response.status_code not in [404]:
+                            
+                            break
+                    except:
+                        continue
+                
+                
+                if tasks_response is None:
+                    
+                    print(f"⚠️ {instance.get('name')}: No tasks endpoint found")
                     status = "unhealthy"
-                else:
-                    # Tasks endpoint is accessible (200) or returns other non-auth error
+                elif tasks_response.status_code in [401, 403]:
+                    
+                    print(f"⚠️ {instance.get('name')}: Authentication required (status {tasks_response.status_code})")
+                    if not has_credentials:
+                        print(f"   ❌ No credentials configured for this instance")
+                    else:
+                        print(f"   ❌ Credentials invalid or insufficient")
+                    status = "unhealthy"
+                elif tasks_response.status_code == 200:
+                    
+                    print(f"✅ {instance.get('name')}: Tasks endpoint accessible")
                     status = "healthy"
+                else:
+                   
+                    print(f"⚠️ {instance.get('name')}: Tasks endpoint returned {tasks_response.status_code}")
+                    status = "healthy"
+                    
             except Exception as tasks_error:
                 print(f"⚠️ Could not check tasks endpoint for {instance.get('name')}: {tasks_error}")
-                # If we can't check tasks endpoint, assume healthy based on service-info
-                status = "healthy"
+                
+                status = "unhealthy"
         
         version = ""
         try:

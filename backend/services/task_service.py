@@ -13,7 +13,14 @@ def fetch_task_status_from_tes(task_id, tes_url, tes_name='Unknown'):
     
     try:
         credentials = get_instance_credentials(tes_name, tes_url)
-        tes_endpoint = f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}?view=FULL"
+        
+        
+        tes_endpoints = [
+            f"{tes_url.rstrip('/')}/ga4gh/tes/v1/tasks/{task_id}?view=FULL",
+            f"{tes_url.rstrip('/')}/v1/tasks/{task_id}?view=FULL",
+            f"{tes_url.rstrip('/')}/tasks/{task_id}?view=FULL"
+        ]
+        
         headers = {'Accept': 'application/json'}
         auth = None
         
@@ -22,22 +29,41 @@ def fetch_task_status_from_tes(task_id, tes_url, tes_name='Unknown'):
         elif credentials.get('user') and credentials.get('password'):
             auth = (credentials['user'], credentials['password'])
         
-        response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+        last_error = None
+        for tes_endpoint in tes_endpoints:
+            try:
+                response = requests.get(tes_endpoint, headers=headers, auth=auth, timeout=10)
+                
+                if response.status_code == 200:
+                    task_data = response.json()
+                    return True, task_data, None
+                elif response.status_code == 404:
+                    
+                    last_error = f"Task {task_id} not found at {tes_endpoint}"
+                    continue
+                else:
+                    last_error = f"HTTP {response.status_code} error from {tes_endpoint}"
+                    if response.status_code not in [401, 403]:
+                        
+                        continue
+                    else:
+                        
+                        return False, None, last_error
+            except requests.exceptions.Timeout:
+                last_error = f"Timeout fetching from {tes_endpoint}"
+                continue
+            except requests.exceptions.ConnectionError as e:
+                last_error = f"Connection error: {str(e)[:100]}"
+                continue
+            except Exception as e:
+                last_error = f"Error: {str(e)[:100]}"
+                continue
         
-        if response.status_code == 200:
-            task_data = response.json()
-            return True, task_data, None
-        elif response.status_code == 404:
-            return False, None, f"Task {task_id} not found on TES instance {tes_url}"
-        else:
-            return False, None, f"HTTP {response.status_code} error from TES instance"
+        
+        return False, None, last_error or f"Task {task_id} not found on TES instance {tes_url}"
     
-    except requests.exceptions.Timeout:
-        return False, None, f"Timeout fetching task {task_id} status"
-    except requests.exceptions.ConnectionError as e:
-        return False, None, f"Connection error: {str(e)[:100]}"
     except Exception as e:
-        return False, None, f"Error: {str(e)[:100]}"
+        return False, None, f"Unexpected error: {str(e)[:100]}"
 
 def update_single_task_status(task):
     task_id = task.get('task_id') or task.get('id')
