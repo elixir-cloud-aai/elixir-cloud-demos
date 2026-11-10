@@ -7,6 +7,13 @@ Demonstrators of the [**ELIXIR Cloud**][res-elixir-cloud], an
 [ELIXIR][res-elixir] federated compute infrastructure based on
 [GA4GH][res-ga4gh] standards.
 
+> [!WARNING]
+> The demo `2023-ecp-f2f` is **retired**: it is kept for the record only and
+> is not maintained. It depends on service versions, forks and FTP servers
+> that no longer exist, and current proTES versions refuse its tasks. See the
+> [Demos page](https://docs.elixir-on.cloud/en/latest/demos/#retired-demos) of the Documentation
+> Hub for details and for the current demos.
+
 ## Usage
 
 Each demonstrator is self-contained and available in its own folder, together
