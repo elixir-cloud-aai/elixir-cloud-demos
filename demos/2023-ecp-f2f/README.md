@@ -1,5 +1,14 @@
 # Demonstrator 2023-ecp-f2f
 
+> [!WARNING]
+> This demo is **retired**: it is kept for the record only and is not
+> maintained. It needs the proTES image of February 2023, forks of `cwl-tes`
+> and `py-tes` at fixed commits, and FTP servers with credentials in the URLs
+> of task inputs and outputs. proTES 0.3.0 and later require an access token
+> and refuse such URLs by default. See the
+> [Demos page](https://docs.elixir-on.cloud/en/latest/demos/#retired-demos) of the Documentation
+> Hub for details and for the current demos.
+
 - **Venue:** [ELIXIR Compute Platform Face-to-Face Meeting, Helsinki](https://elixir-europe.org/events/elixir-compute-platform-2023-face-face-meeting)
 - **Date:** Feb 8/9, 2023
 
