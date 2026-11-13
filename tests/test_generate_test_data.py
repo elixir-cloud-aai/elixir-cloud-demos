@@ -39,7 +39,7 @@ def test_rows_have_expected_columns() -> None:
 
 def test_rows_reject_non_positive_count() -> None:
     """Asking for no rows is an error."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="positive"):
         gen.make_rows(node="node-a", n_rows=0)
 
 
@@ -74,3 +74,13 @@ def test_main_writes_to_given_directory(tmp_path: Path) -> None:
     """The command line entry point writes into the given directory."""
     assert gen.main(["--out-dir", str(tmp_path)]) == 0
     assert (tmp_path / "manifest.json").is_file()
+
+
+def test_node_b_has_higher_mean_od600() -> None:
+    """The partitions differ like data of two sites, as the README says."""
+
+    def mean_od600(node: str) -> float:
+        rows = gen.make_rows(node=node)
+        return sum(float(r["od600"]) for r in rows) / len(rows)
+
+    assert mean_od600("node-b") > mean_od600("node-a")

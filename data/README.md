@@ -28,6 +28,10 @@ repository on GitHub, e.g.:
 https://raw.githubusercontent.com/elixir-cloud-aai/elixir-cloud-demos/main/data/synthetic-growth/node-a.csv
 ```
 
+The URLs follow `main`: a change to the data changes what they serve and
+the checksums in the manifest. For a fixed copy, replace `main` by a commit
+SHA in the URLs.
+
 A TES task can use such a URL directly as an input (`inputs[].url`), as long
 as the TES service may download from GitHub. To place the data at a Node
 instead, e.g. in its object store, copy the files there and check them
@@ -47,5 +51,5 @@ them, change the script and run, from the repository root:
 uv run python scripts/generate_test_data.py
 ```
 
-The tests (`uv run --group dev pytest`) fail if the committed files and the
+The tests (`uv run pytest`) fail if the committed files and the
 manifest differ from what the script writes.

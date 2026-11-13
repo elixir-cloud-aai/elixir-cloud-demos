@@ -136,7 +136,9 @@ def write_data_sets(out_dir: Path, base_url: str = BASE_URL) -> dict[str, Any]:
             }
         ]
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", newline="\n"
+    )
     return manifest
 
 
