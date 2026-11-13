@@ -1,0 +1,31 @@
+{
+  "datasets": [
+    {
+      "name": "synthetic-growth",
+      "description": "Synthetic growth measurements (optical density at 600 nm and a reporter expression level) under two conditions, split into one partition per Node. Made up by a seeded random number generator; describes no real sample.",
+      "license": "CC0-1.0",
+      "columns": [
+        "sample_id",
+        "condition",
+        "od600",
+        "expression"
+      ],
+      "files": [
+        {
+          "node": "node-a",
+          "path": "synthetic-growth/node-a.csv",
+          "url": "https://raw.githubusercontent.com/elixir-cloud-aai/elixir-cloud-demos/main/data/synthetic-growth/node-a.csv",
+          "sha256": "425161d3670348f82b5fa1144dc9528b236c5a02fab4e609d5bbcd02fcff0f0f",
+          "size": 1626
+        },
+        {
+          "node": "node-b",
+          "path": "synthetic-growth/node-b.csv",
+          "url": "https://raw.githubusercontent.com/elixir-cloud-aai/elixir-cloud-demos/main/data/synthetic-growth/node-b.csv",
+          "sha256": "70b57e5c779eb9f1d14c9206d396e80a2e066ca031167ac1e71ff32089648ad6",
+          "size": 1624
+        }
+      ]
+    }
+  ]
+}

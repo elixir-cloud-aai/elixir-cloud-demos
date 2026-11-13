@@ -1,0 +1,43 @@
+[project]
+name = "elixir-cloud-demos"
+version = "0.0.0"
+description = "Demonstrators of ELIXIR On-Cloud"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts", "demos/federated-analytics"]
+testpaths = ["tests"]
+addopts = "--cov=scripts --cov=demos/federated-analytics --cov-report=term-missing --cov-fail-under=100"
+
+[tool.ruff]
+extend-exclude = ["demos/2023-ecp-f2f"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "D", "ANN"]
+# JSON documents of the TES API are typed as Any
+per-file-ignores = { "demos/federated-analytics/*" = ["ANN401"], "tests/test_federated_analytics.py" = ["ANN401"] }
+
+[tool.ruff.lint.isort]
+known-first-party = ["generate_test_data", "federated_analytics", "local_stats"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+strict = true
+files = ["scripts", "demos/federated-analytics", "tests"]
+mypy_path = ["scripts", "demos/federated-analytics"]

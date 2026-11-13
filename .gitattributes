@@ -1,0 +1,2 @@
+# The test data are compared byte for byte and checksummed: keep LF endings
+data/** -text
