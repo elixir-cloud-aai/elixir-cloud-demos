@@ -252,18 +252,31 @@ def test_main_tes(
     assert fake.requests[0].get_header("Authorization") == "Bearer secret-for-test"
 
 
-def test_main_rejects_mismatched_tes_count() -> None:
+def test_main_rejects_mismatched_tes_count(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """``--tes`` must be given once or once per partition."""
-    urls = ["--tes", "https://a.org", "--tes", "https://b.org", "--tes", "https://c"]
-    with pytest.raises(SystemExit):
+    n_parts = len(fa.load_partitions(MANIFEST))
+    urls = [arg for i in range(n_parts + 1) for arg in ("--tes", f"https://{i}.org")]
+    with pytest.raises(SystemExit) as exc:
         fa.main(urls, transport=FakeTes())
+    assert exc.value.code == 2
+    assert "give --tes once" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "x", "nan", "inf"])
+def test_main_rejects_non_positive_poll(value: str) -> None:
+    """``--poll`` and ``--timeout`` must be positive numbers."""
+    with pytest.raises(SystemExit):
+        fa.main(["--tes", "https://gw.org", "--poll", value], transport=FakeTes())
 
 
 def test_main_reports_task_errors(capsys: pytest.CaptureFixture[str]) -> None:
     """A failed task ends the run with a message and exit code 1."""
     fake = FakeTes(states=["SYSTEM_ERROR"] * 2)
     assert (
-        fa.main(["--tes", "https://gw.example.org", "--poll", "0"], transport=fake) == 1
+        fa.main(["--tes", "https://gw.example.org", "--poll", "0.01"], transport=fake)
+        == 1
     )
     assert "SYSTEM_ERROR" in capsys.readouterr().err
 
@@ -314,4 +327,15 @@ def test_request_wraps_network_errors() -> None:
 
     client = fa.TesClient("https://tes.example.org", transport=transport)
     with pytest.raises(fa.TaskError, match="no route"):
+        client.submit({})
+
+
+def test_request_wraps_timeouts() -> None:
+    """Read timeouts become task errors."""
+
+    def transport(request: urllib.request.Request) -> Any:
+        raise TimeoutError("read timed out")
+
+    client = fa.TesClient("https://tes.example.org", transport=transport)
+    with pytest.raises(fa.TaskError, match="timed out"):
         client.submit({})

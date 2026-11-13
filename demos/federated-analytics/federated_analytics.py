@@ -228,6 +228,8 @@ class TesClient:
             raise TaskError(f"{url}: HTTP {exc.code} {exc.reason}{hint}") from exc
         except urllib.error.URLError as exc:
             raise TaskError(f"{url}: {exc.reason}") from exc
+        except (OSError, ValueError) as exc:
+            raise TaskError(f"{url}: {exc}") from exc
 
     def submit(self, task: dict[str, Any]) -> str:
         """Create a task.
@@ -342,6 +344,27 @@ def report(result: dict[str, dict[str, dict[str, float]]]) -> str:
     return "\n".join(lines)
 
 
+def _positive(value: str) -> float:
+    """Parse a positive number of seconds.
+
+    Args:
+        value: Command line value.
+
+    Returns:
+        The number.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not a positive number.
+    """
+    try:
+        number = float(value)
+    except ValueError:
+        number = 0.0
+    if not (number > 0 and math.isfinite(number)):
+        raise argparse.ArgumentTypeError(f"not a positive number: {value!r}")
+    return number
+
+
 def main(argv: Sequence[str] | None = None, transport: Transport = _http) -> int:
     """Run the demo from the command line.
 
@@ -367,10 +390,10 @@ def main(argv: Sequence[str] | None = None, transport: Transport = _http) -> int
     parser.add_argument("--image", default=DEFAULT_IMAGE)
     parser.add_argument("--json", action="store_true", help="print JSON")
     parser.add_argument(
-        "--poll", type=float, default=5.0, help="seconds between status requests"
+        "--poll", type=_positive, default=5.0, help="seconds between status requests"
     )
     parser.add_argument(
-        "--timeout", type=float, default=1800.0, help="seconds to wait per task"
+        "--timeout", type=_positive, default=1800.0, help="seconds to wait per task"
     )
     args = parser.parse_args(argv)
 
