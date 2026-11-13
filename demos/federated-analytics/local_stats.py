@@ -13,6 +13,7 @@ it.
 
 import csv
 import json
+import math
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -34,21 +35,35 @@ def summarise(rows: Iterable[dict[str, str]]) -> Stats:
         Aggregates as ``{condition: {column: {"n", "sum", "sumsq"}}}``.
 
     Raises:
-        ValueError: If a row lacks a column or has a non-numeric value.
+        ValueError: If there are no rows, or a row lacks a column or has a
+            value that is not a finite number. The message names the row
+            number and column only, never values, so that no data leave the
+            Node through error logs.
     """
     stats: Stats = {}
-    for row in rows:
-        try:
-            group = row[GROUP_COLUMN]
-            values = {col: float(row[col]) for col in VALUE_COLUMNS}
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"invalid row {row!r}: {exc}") from exc
+    for number, row in enumerate(rows, start=1):
+        group = row.get(GROUP_COLUMN)
+        if group is None:
+            raise ValueError(f"row {number}: missing column {GROUP_COLUMN!r}")
+        values = {}
+        for col in VALUE_COLUMNS:
+            try:
+                value = float(row[col])
+            except (KeyError, TypeError, ValueError):
+                value = math.nan
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"row {number}: column {col!r} is not a finite number"
+                ) from None
+            values[col] = value
         per_group = stats.setdefault(group, {})
         for col, value in values.items():
             agg = per_group.setdefault(col, {"n": 0.0, "sum": 0.0, "sumsq": 0.0})
             agg["n"] += 1
             agg["sum"] += value
             agg["sumsq"] += value * value
+    if not stats:
+        raise ValueError("partition has no rows")
     return stats
 
 
@@ -66,8 +81,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if len(args) != 1:
         print("usage: local_stats.py <csv-file>", file=sys.stderr)
         return 2
-    with Path(args[0]).open(newline="") as handle:
-        stats = summarise(csv.DictReader(handle))
+    try:
+        with Path(args[0]).open(newline="") as handle:
+            stats = summarise(csv.DictReader(handle))
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     print(json.dumps(stats, sort_keys=True))
     return 0
 

@@ -72,7 +72,13 @@ python demos/federated-analytics/federated_analytics.py \
 | `--timeout` | Seconds to wait for each task, requests included (default: 1800). |
 
 If a request or a task fails, the demo prints the error (with a hint for HTTP
-401 and 403) and exits with code 1. Tasks it has already sent keep running.
+401 and 403) and exits with code 1. It then asks the services to cancel the
+tasks it has sent.
+
+The demo sends `TES_TOKEN` only over HTTPS (plain HTTP only to `localhost`)
+and refuses redirects, so that the token never goes to another origin. If a
+partition has invalid data, `local_stats.py` names the row number and column
+only, never values, so that no data leave the Node through the task logs.
 
 The services need:
 

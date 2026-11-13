@@ -45,6 +45,8 @@ class FakeTes:
     def __call__(self, request: urllib.request.Request) -> Any:
         """Answer a request like a TES service."""
         self.requests.append(request)
+        if request.full_url.endswith(":cancel"):
+            return {}
         if request.data is not None:
             task = json.loads(cast(bytes, request.data))
             task_id = f"task-{len(self.tasks) + 1}"
@@ -84,6 +86,7 @@ def test_summarise_counts_sums_and_squares() -> None:
     [
         {"condition": "a", "od600": "x", "expression": "1"},
         {"condition": "a", "od600": "1"},
+        {"od600": "1", "expression": "1"},
     ],
 )
 def test_summarise_rejects_invalid_rows(row: dict[str, str]) -> None:
@@ -339,3 +342,115 @@ def test_request_wraps_timeouts() -> None:
     client = fa.TesClient("https://tes.example.org", transport=transport)
     with pytest.raises(fa.TaskError, match="timed out"):
         client.submit({})
+
+
+def test_summarise_errors_name_no_values() -> None:
+    """Errors give the row number and column, never the values of the row."""
+    rows = [
+        {"condition": "a", "od600": "1", "expression": "2"},
+        {"condition": "secret-group", "od600": "secret-value", "expression": "2"},
+    ]
+    with pytest.raises(ValueError) as exc:
+        local_stats.summarise(rows)
+    assert "row 2" in str(exc.value) and "od600" in str(exc.value)
+    assert "secret" not in str(exc.value)
+    assert exc.value.__cause__ is None
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+def test_summarise_rejects_non_finite_values(value: str) -> None:
+    """Non-finite values are errors."""
+    with pytest.raises(ValueError, match="finite"):
+        local_stats.summarise([{"condition": "a", "od600": value, "expression": "1"}])
+
+
+def test_summarise_rejects_empty_partition() -> None:
+    """A partition without rows is an error."""
+    with pytest.raises(ValueError, match="no rows"):
+        local_stats.summarise([])
+
+
+def test_local_stats_main_reports_invalid_data(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid data end with a short message and exit code 1, no traceback."""
+    path = tmp_path / "bad.csv"
+    path.write_text("condition,od600,expression\nsecret,x,1\n")
+    assert local_stats.main([str(path)]) == 1
+    err = capsys.readouterr().err
+    assert "row 1" in err and "secret" not in err
+
+
+def test_json_output_has_no_nan() -> None:
+    """Undefined values are null in JSON output."""
+    result = fa.combine([{"a": {"x": {"n": 1, "sum": 2, "sumsq": 4}}}])
+    assert json.loads(fa.to_json(result))["a"]["x"]["sd"] is None
+
+
+@pytest.mark.parametrize(
+    "response", [{"no": "id"}, ["not", "an", "object"]], ids=["no-id", "list"]
+)
+def test_submit_rejects_malformed_responses(response: Any) -> None:
+    """A response without a task ID is a task error."""
+    client = fa.TesClient("https://tes.example.org", transport=lambda _: response)
+    with pytest.raises(fa.TaskError, match="malformed"):
+        client.submit({})
+
+
+def test_wait_rejects_malformed_responses() -> None:
+    """A status response that is not an object is a task error."""
+
+    def transport(request: urllib.request.Request) -> Any:
+        return {"id": "x"} if request.data else ["oops"]
+
+    client = fa.TesClient("https://tes.example.org", transport=transport)
+    with pytest.raises(fa.TaskError, match="malformed"):
+        client.wait(client.submit({}))
+
+
+def test_token_needs_https() -> None:
+    """A token is never sent over plain HTTP, except to localhost."""
+    with pytest.raises(ValueError, match="HTTPS"):
+        fa.TesClient("http://tes.example.org", token="t")
+    fa.TesClient("http://localhost:8000", token="t")
+    fa.TesClient("http://127.0.0.1:8000", token="t")
+    fa.TesClient("http://tes.example.org")
+
+
+def test_main_refuses_token_over_http(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The command line refuses to send a token over plain HTTP."""
+    monkeypatch.setenv("TES_TOKEN", "t")
+    with pytest.raises(SystemExit):
+        fa.main(["--tes", "http://gw.example.org"], transport=FakeTes())
+    assert "HTTPS" in capsys.readouterr().err
+
+
+def test_redirects_are_refused() -> None:
+    """Redirects are refused, so that tokens never go to another origin."""
+    handler = fa.NoRedirect()
+    request = urllib.request.Request("https://tes.example.org/x")
+    with pytest.raises(urllib.error.HTTPError, match="redirect"):
+        handler.redirect_request(
+            request, None, 302, "Found", {}, "https://evil.example.org/"
+        )
+
+
+def test_run_tes_cancels_tasks_on_failure() -> None:
+    """When a task fails, the client cancels the tasks it has sent."""
+    fake = FakeTes(states=["SYSTEM_ERROR"])
+    client = fa.TesClient("https://tes.example.org", transport=fake)
+    with pytest.raises(fa.TaskError):
+        fa.run_tes(fa.load_partitions(MANIFEST), [client])
+    cancelled = [r.full_url for r in fake.requests if r.full_url.endswith(":cancel")]
+    assert cancelled == [f"{client.url}/task-{i}:cancel" for i in (1, 2)]
+
+
+def test_cancel_ignores_errors() -> None:
+    """Cancelling is best effort: errors are ignored."""
+
+    def transport(request: urllib.request.Request) -> Any:
+        raise urllib.error.URLError("down")
+
+    fa.TesClient("https://tes.example.org", transport=transport).cancel("x")

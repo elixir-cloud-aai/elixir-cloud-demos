@@ -23,6 +23,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -170,6 +171,39 @@ def make_task(part: dict[str, Any], script: str, image: str) -> dict[str, Any]:
     }
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects, so that tokens never go to another origin."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        """Refuse to follow a redirect.
+
+        Args:
+            req: The original request.
+            fp: The response body.
+            code: The HTTP status code.
+            msg: The HTTP reason phrase.
+            headers: The response headers.
+            newurl: The target of the redirect.
+
+        Raises:
+            urllib.error.HTTPError: Always.
+        """
+        raise urllib.error.HTTPError(
+            req.full_url, code, f"refused redirect to {newurl}", headers, fp
+        )
+
+
+_OPENER = urllib.request.build_opener(NoRedirect)
+
+
 def _http(request: urllib.request.Request) -> Any:  # pragma: no cover
     """Send a request and decode the JSON response.
 
@@ -179,7 +213,7 @@ def _http(request: urllib.request.Request) -> Any:  # pragma: no cover
     Returns:
         The decoded response body.
     """
-    with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+    with _OPENER.open(request, timeout=60) as response:
         return json.load(response)
 
 
@@ -195,7 +229,19 @@ class TesClient:
     def __init__(
         self, base_url: str, token: str | None = None, transport: Transport = _http
     ) -> None:
-        """Initialise the client."""
+        """Initialise the client.
+
+        Raises:
+            ValueError: If a token would go over plain HTTP to a host other
+                than localhost.
+        """
+        parsed = urllib.parse.urlsplit(base_url)
+        if (
+            token
+            and parsed.scheme != "https"
+            and parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+        ):
+            raise ValueError(f"refusing to send a token to {base_url}: use HTTPS")
         self.url = base_url.rstrip("/") + TES_PATH
         self.token = token
         self.transport = transport
@@ -239,8 +285,25 @@ class TesClient:
 
         Returns:
             The ID of the task.
+
+        Raises:
+            TaskError: If the response has no task ID.
         """
-        return str(self._request(self.url, task)["id"])
+        response = self._request(self.url, task)
+        if not isinstance(response, dict) or "id" not in response:
+            raise TaskError(f"{self.url}: malformed response, no task ID")
+        return str(response["id"])
+
+    def cancel(self, task_id: str) -> None:
+        """Cancel a task, as far as possible; errors are ignored.
+
+        Args:
+            task_id: ID of the task.
+        """
+        try:
+            self._request(f"{self.url}/{task_id}:cancel", {})
+        except TaskError:
+            pass
 
     def wait(
         self,
@@ -269,6 +332,8 @@ class TesClient:
         deadline = clock() + timeout
         while True:
             task = self._request(f"{self.url}/{task_id}?view=FULL")
+            if not isinstance(task, dict):
+                raise TaskError(f"task {task_id}: malformed response")
             state = task.get("state", "UNKNOWN")
             if state in TERMINAL_STATES:
                 break
@@ -302,22 +367,54 @@ def run_tes(
 
     Returns:
         The aggregates of each partition.
+
+    Raises:
+        TaskError: If a task can't be sent or fails; the tasks sent so far
+            are then cancelled.
     """
     script = SCRIPT.read_text()
-    submitted = []
-    for idx, part in enumerate(partitions):
-        client = clients[idx % len(clients)]
-        task_id = client.submit(make_task(part, script, image))
-        print(f"Submitted {part['node']} to {client.url}: {task_id}", file=sys.stderr)
-        submitted.append((client, task_id))
+    submitted: list[tuple[TesClient, str]] = []
     partials = []
-    for client, task_id in submitted:
-        stdout = client.wait(task_id, **wait_kwargs)
-        try:
-            partials.append(json.loads(stdout.strip().splitlines()[-1]))
-        except (IndexError, json.JSONDecodeError) as exc:
-            raise TaskError(f"task {task_id} printed no JSON: {stdout!r}") from exc
+    try:
+        for idx, part in enumerate(partitions):
+            client = clients[idx % len(clients)]
+            task_id = client.submit(make_task(part, script, image))
+            print(
+                f"Submitted {part['node']} to {client.url}: {task_id}",
+                file=sys.stderr,
+            )
+            submitted.append((client, task_id))
+        for client, task_id in submitted:
+            stdout = client.wait(task_id, **wait_kwargs)
+            try:
+                partials.append(json.loads(stdout.strip().splitlines()[-1]))
+            except (IndexError, json.JSONDecodeError) as exc:
+                raise TaskError(f"task {task_id} printed no JSON") from exc
+    except TaskError:
+        for client, task_id in submitted:
+            client.cancel(task_id)
+        raise
     return partials
+
+
+def to_json(result: dict[str, dict[str, dict[str, float]]]) -> str:
+    """Serialise the combined statistics as strict JSON.
+
+    Args:
+        result: Output of ``combine``.
+
+    Returns:
+        JSON, with ``null`` for undefined values such as the standard
+        deviation of a single value.
+    """
+    clean = {
+        group: {
+            col: {k: (None if math.isnan(v) else v) for k, v in agg.items()}
+            for col, agg in columns.items()
+        }
+        for group, columns in result.items()
+    }
+    return json.dumps(clean, indent=2, sort_keys=True, allow_nan=False)
 
 
 def report(result: dict[str, dict[str, dict[str, float]]]) -> str:
@@ -407,7 +504,12 @@ def main(argv: Sequence[str] | None = None, transport: Transport = _http) -> int
                 "(one per partition)"
             )
         token = os.environ.get("TES_TOKEN") or None
-        clients = [TesClient(url, token=token, transport=transport) for url in args.tes]
+        try:
+            clients = [
+                TesClient(url, token=token, transport=transport) for url in args.tes
+            ]
+        except ValueError as exc:
+            parser.error(str(exc))
         try:
             partials = run_tes(
                 partitions,
@@ -420,7 +522,7 @@ def main(argv: Sequence[str] | None = None, transport: Transport = _http) -> int
             print(f"Error: {exc}", file=sys.stderr)
             return 1
     result = combine(partials)
-    print(json.dumps(result, indent=2, sort_keys=True) if args.json else report(result))
+    print(to_json(result) if args.json else report(result))
     return 0
 
 
