@@ -29,7 +29,7 @@ extend-exclude = ["demos/2023-ecp-f2f"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "D", "ANN"]
 # JSON documents of the TES API are typed as Any
-ignore = ["ANN401"]
+per-file-ignores = { "demos/federated-analytics/*" = ["ANN401"], "tests/test_federated_analytics.py" = ["ANN401"] }
 
 [tool.ruff.lint.isort]
 known-first-party = ["generate_test_data", "federated_analytics", "local_stats"]

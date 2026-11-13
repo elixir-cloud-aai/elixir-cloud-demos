@@ -22,6 +22,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -208,6 +209,9 @@ class TesClient:
 
         Returns:
             The decoded response body.
+
+        Raises:
+            TaskError: If the request fails.
         """
         headers = {"Accept": "application/json"}
         data = None
@@ -216,7 +220,14 @@ class TesClient:
             data = json.dumps(body).encode()
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        return self.transport(urllib.request.Request(url, data=data, headers=headers))
+        request = urllib.request.Request(url, data=data, headers=headers)
+        try:
+            return self.transport(request)
+        except urllib.error.HTTPError as exc:
+            hint = " (is TES_TOKEN set and valid?)" if exc.code in (401, 403) else ""
+            raise TaskError(f"{url}: HTTP {exc.code} {exc.reason}{hint}") from exc
+        except urllib.error.URLError as exc:
+            raise TaskError(f"{url}: {exc.reason}") from exc
 
     def submit(self, task: dict[str, Any]) -> str:
         """Create a task.
@@ -235,14 +246,16 @@ class TesClient:
         poll: float = 5.0,
         timeout: float = 1800.0,
         sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
     ) -> str:
         """Wait for a task to end and return the output of its executor.
 
         Args:
             task_id: ID of the task.
             poll: Seconds between status requests.
-            timeout: Seconds to wait at most.
+            timeout: Seconds to wait at most for this task, requests included.
             sleep: Function to wait with; for tests.
+            clock: Monotonic clock in seconds; for tests.
 
         Returns:
             The standard output of the last executor.
@@ -251,16 +264,15 @@ class TesClient:
             TaskError: If the task doesn't complete in time, fails, or has no
                 output in its logs.
         """
-        waited = 0.0
+        deadline = clock() + timeout
         while True:
             task = self._request(f"{self.url}/{task_id}?view=FULL")
             state = task.get("state", "UNKNOWN")
             if state in TERMINAL_STATES:
                 break
-            if waited >= timeout:
+            if clock() >= deadline:
                 raise TaskError(f"task {task_id} still {state} after {timeout}s")
             sleep(poll)
-            waited += poll
         if state != "COMPLETE":
             raise TaskError(f"task {task_id} ended in state {state}")
         try:
@@ -330,11 +342,12 @@ def report(result: dict[str, dict[str, dict[str, float]]]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, transport: Transport = _http) -> int:
     """Run the demo from the command line.
 
     Args:
         argv: Command line arguments; ``sys.argv[1:]`` if not given.
+        transport: Function that sends requests to TES; for tests.
 
     Returns:
         The exit code.
@@ -353,15 +366,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, default=DATA_DIR / "manifest.json")
     parser.add_argument("--image", default=DEFAULT_IMAGE)
     parser.add_argument("--json", action="store_true", help="print JSON")
+    parser.add_argument(
+        "--poll", type=float, default=5.0, help="seconds between status requests"
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=1800.0, help="seconds to wait per task"
+    )
     args = parser.parse_args(argv)
 
     partitions = load_partitions(args.manifest)
     if args.local:
         partials = run_local(partitions, args.manifest.parent)
     else:
+        if len(args.tes) not in (1, len(partitions)):
+            parser.error(
+                f"give --tes once (gateway) or {len(partitions)} times "
+                "(one per partition)"
+            )
         token = os.environ.get("TES_TOKEN") or None
-        clients = [TesClient(url, token=token) for url in args.tes]
-        partials = run_tes(partitions, clients, image=args.image)
+        clients = [TesClient(url, token=token, transport=transport) for url in args.tes]
+        try:
+            partials = run_tes(
+                partitions,
+                clients,
+                image=args.image,
+                poll=args.poll,
+                timeout=args.timeout,
+            )
+        except TaskError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
     result = combine(partials)
     print(json.dumps(result, indent=2, sort_keys=True) if args.json else report(result))
     return 0

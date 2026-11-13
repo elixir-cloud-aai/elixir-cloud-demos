@@ -64,10 +64,15 @@ python demos/federated-analytics/federated_analytics.py \
 
 | Option or variable | Meaning |
 | --- | --- |
-| `--tes URL` | Base URL of a TES service or gateway, without `/ga4gh/tes/v1`. With one URL, all tasks go there; with several, partitions go to them in turn. |
+| `--tes URL` | Base URL of a TES service or gateway, without `/ga4gh/tes/v1`. Give it once (all tasks go there) or once per partition (in the order of the manifest); other counts are an error. |
 | `TES_TOKEN` | Access token, sent as bearer token if set. proTES 0.3.0 and later need one, from an identity provider the gateway accepts (see [Access control](https://protes.readthedocs.io/en/latest/access-control/)). |
 | `--image` | Container image with Python 3 for the tasks (default: `python:3.13-slim`). |
 | `--manifest` | Manifest of the partitions (default: `data/manifest.json`). |
+| `--poll` | Seconds between status requests (default: 5). |
+| `--timeout` | Seconds to wait for each task, requests included (default: 1800). |
+
+If a request or a task fails, the demo prints the error (with a hint for HTTP
+401 and 403) and exits with code 1. Tasks it has already sent keep running.
 
 The services need:
 

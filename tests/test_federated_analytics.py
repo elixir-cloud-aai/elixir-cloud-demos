@@ -6,6 +6,7 @@ import math
 import statistics
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, cast
@@ -189,7 +190,13 @@ def test_wait_times_out() -> None:
     client = fa.TesClient("https://tes.example.org", transport=fake)
     task_id = client.submit({})
     with pytest.raises(fa.TaskError, match="still RUNNING"):
-        client.wait(task_id, poll=1, timeout=1, sleep=lambda _: None)
+        client.wait(
+            task_id,
+            poll=1,
+            timeout=1,
+            sleep=lambda _: None,
+            clock=iter(range(10)).__next__,
+        )
 
 
 def test_wait_raises_without_logs() -> None:
@@ -239,16 +246,53 @@ def test_main_tes(
 ) -> None:
     """``--tes`` sends the tasks with the token of ``TES_TOKEN``."""
     fake = FakeTes()
-    original = fa.TesClient.__init__
-
-    def init(self: fa.TesClient, base_url: str, token: str | None = None) -> None:
-        original(self, base_url, token=token, transport=fake)
-
-    monkeypatch.setattr(fa.TesClient, "__init__", init)
     monkeypatch.setenv("TES_TOKEN", "secret-for-test")
-    assert fa.main(["--tes", "https://gw.example.org"]) == 0
+    assert fa.main(["--tes", "https://gw.example.org"], transport=fake) == 0
     assert "Welch's t" in capsys.readouterr().out
     assert fake.requests[0].get_header("Authorization") == "Bearer secret-for-test"
+
+
+def test_main_rejects_mismatched_tes_count() -> None:
+    """``--tes`` must be given once or once per partition."""
+    urls = ["--tes", "https://a.org", "--tes", "https://b.org", "--tes", "https://c"]
+    with pytest.raises(SystemExit):
+        fa.main(urls, transport=FakeTes())
+
+
+def test_main_reports_task_errors(capsys: pytest.CaptureFixture[str]) -> None:
+    """A failed task ends the run with a message and exit code 1."""
+    fake = FakeTes(states=["SYSTEM_ERROR"] * 2)
+    assert (
+        fa.main(["--tes", "https://gw.example.org", "--poll", "0"], transport=fake) == 1
+    )
+    assert "SYSTEM_ERROR" in capsys.readouterr().err
+
+
+def test_request_wraps_http_errors() -> None:
+    """HTTP and network errors become task errors with a hint."""
+
+    def transport(request: urllib.request.Request) -> Any:
+        raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, None)  # type: ignore[arg-type]
+
+    client = fa.TesClient("https://tes.example.org", transport=transport)
+    with pytest.raises(fa.TaskError, match="401.*TES_TOKEN"):
+        client.submit({})
+
+
+def test_wait_counts_request_time() -> None:
+    """The timeout includes the time requests take, not only sleeps."""
+    fake = FakeTes(states=["RUNNING"] * 5)
+    client = fa.TesClient("https://tes.example.org", transport=fake)
+    task_id = client.submit({})
+    ticks = iter([0.0, 100.0, 200.0])
+    with pytest.raises(fa.TaskError, match="still RUNNING"):
+        client.wait(
+            task_id,
+            poll=1,
+            timeout=150,
+            sleep=lambda _: None,
+            clock=lambda: next(ticks),
+        )
 
 
 def test_quick_start_runs_as_script() -> None:
@@ -260,3 +304,14 @@ def test_quick_start_runs_as_script() -> None:
         text=True,
     )
     assert "Welch's t (treated vs control), expression" in out.stdout
+
+
+def test_request_wraps_network_errors() -> None:
+    """Network errors become task errors."""
+
+    def transport(request: urllib.request.Request) -> Any:
+        raise urllib.error.URLError("no route")
+
+    client = fa.TesClient("https://tes.example.org", transport=transport)
+    with pytest.raises(fa.TaskError, match="no route"):
+        client.submit({})
