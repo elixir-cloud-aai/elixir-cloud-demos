@@ -104,6 +104,7 @@ def write_data_sets(out_dir: Path, base_url: str = BASE_URL) -> dict[str, Any]:
     Returns:
         The manifest, as also written to ``manifest.json``.
     """
+    base_url = base_url.rstrip("/")
     files = []
     for node in NODES:
         rel_path = f"{DATASET}/{node}.csv"

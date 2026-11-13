@@ -84,3 +84,10 @@ def test_node_b_has_higher_mean_od600() -> None:
         return sum(float(r["od600"]) for r in rows) / len(rows)
 
     assert mean_od600("node-b") > mean_od600("node-a")
+
+
+def test_base_url_trailing_slash_is_ignored(tmp_path: Path) -> None:
+    """A trailing slash of the base URL gives no empty path segment."""
+    manifest = gen.write_data_sets(out_dir=tmp_path, base_url="https://x.org/data/")
+    url = manifest["datasets"][0]["files"][0]["url"]
+    assert url == "https://x.org/data/synthetic-growth/node-a.csv"
