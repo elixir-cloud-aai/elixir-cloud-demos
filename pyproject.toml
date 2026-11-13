@@ -1,0 +1,41 @@
+[project]
+name = "elixir-cloud-demos"
+version = "0.0.0"
+description = "Demonstrators of ELIXIR On-Cloud"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+testpaths = ["tests"]
+addopts = "--cov=scripts --cov-report=term-missing --cov-fail-under=100"
+
+[tool.ruff]
+extend-exclude = ["demos/2023-ecp-f2f"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "D", "ANN"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["generate_test_data"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+strict = true
+files = ["scripts", "tests"]
+mypy_path = "scripts"
