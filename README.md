@@ -25,6 +25,7 @@ Follow the shortcuts in the following table to the individual demos.
 | Name | First Demo | Description |
 | --- | --- | --- |
 | [2023-ecp-f2f](demos/2023-ecp-f2f/README.md) | ELIXIR Compute Face-to-Face, Helsinki, Feb 7-8, 2023 | Task execution via the [Task Execution Service (TES) API](https://github.com/ga4gh/task-execution-schemas/) on Kubernetes and HPC; TES-based task distribution with random and distance-based task distribution logic; execution of a CWL workflow via the `cwl-tes` TES backend |
+| [federated-analytics](demos/federated-analytics/README.md) | Not yet given | The same analysis at two Nodes via TES tasks, optionally through the proTES gateway; only aggregates leave the Nodes and are combined into the result of the whole data set |
 
 ## Test data
 
