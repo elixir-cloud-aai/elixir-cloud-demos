@@ -1,0 +1,93 @@
+# Everything that must pass on pull requests and pushes to `main`. Needs no
+# secrets. No `paths:` filters, so that the gate always reports. The gate
+# `passed` ("CI passed") is the only check to require; add every new job to
+# its `needs`. The retired demo `2023-ecp-f2f` is not checked.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Only a new head commit of a pull request cancels its runs in progress
+# (action `synchronize`, first attempt); runs for other actions and reruns
+# wait, so that a run on the same commit never leaves a cancelled, failed
+# `CI passed` (see "Cancelled runs" in `actions/gate/README.md` of
+# `elixir-cloud-aai/.github`). Runs for pushes get their own group, so that
+# none is dropped
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request'
+    && github.event.action == 'synchronize'
+    && github.run_attempt == 1 }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+      - name: Install dependencies
+        run: |
+          uv sync --locked --python "$(which python)"
+          echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
+      - name: Run linters and type checks
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+      - name: Install dependencies
+        run: |
+          uv sync --locked --python "$(which python)"
+          echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
+      # Fails below 100% coverage and if the test data differ from what
+      # `scripts/generate_test_data.py` writes (`pyproject.toml`)
+      - name: Run tests
+        run: pytest
+
+  passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [lint, test]
+    permissions: {}
+    steps:
+      - name: Check results of all jobs
+        uses: elixir-cloud-aai/.github/actions/gate@743e82d290a53768454999e413756a924e383259 # v1.0.0
+        with:
+          needs: ${{ toJSON(needs) }}
